@@ -8,6 +8,8 @@ import {
   LogOut,
   RotateCcw,
   ShieldCheck,
+  Volume2,
+  VolumeX,
   XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -17,6 +19,7 @@ import {
   statusOrder,
   statuses,
 } from "../data/menu";
+import { useNewOrderSound } from "../hooks/useNewOrderSound";
 
 const filters = [
   { id: "active", label: "En cours" },
@@ -34,12 +37,24 @@ export function KitchenDashboard({ store }) {
   const [isUnlocked, setIsUnlocked] = useState(store.mode === "local");
   const [authChecked, setAuthChecked] = useState(store.mode === "local");
   const [sessionMeta, setSessionMeta] = useState({});
+  const [ordersSnapshotReady, setOrdersSnapshotReady] = useState(false);
+  const { soundEnabled, toggleSound } = useNewOrderSound(orders, {
+    archived: Boolean(sessionMeta.archived),
+    snapshotReady: ordersSnapshotReady,
+  });
 
   useEffect(() => {
     if (!isUnlocked) return undefined;
-    return store.subscribeOrders(setOrders, (err) => {
-      setError(err.message || "Impossible de charger les commandes.");
-    });
+    setOrdersSnapshotReady(false);
+    return store.subscribeOrders(
+      (nextOrders) => {
+        setOrders(nextOrders);
+        setOrdersSnapshotReady(true);
+      },
+      (err) => {
+        setError(err.message || "Impossible de charger les commandes.");
+      },
+    );
   }, [isUnlocked, store]);
 
   useEffect(() => {
@@ -151,6 +166,15 @@ export function KitchenDashboard({ store }) {
           <ShieldCheck aria-hidden="true" />
           {store.mode === "firebase" ? "Temps réel" : "Mode local"}
         </span>
+        <button
+          className="secondary-action compact"
+          type="button"
+          aria-pressed={soundEnabled}
+          onClick={toggleSound}
+        >
+          {soundEnabled ? <Volume2 aria-hidden="true" /> : <VolumeX aria-hidden="true" />}
+          {soundEnabled ? "Son activé" : "Son coupé"}
+        </button>
         {sessionMeta.archived && <span className="status-pill status-blue">Session archivée</span>}
         <button
           className="secondary-action compact"

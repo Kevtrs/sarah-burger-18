@@ -181,7 +181,7 @@
 }
 
 .mascot-onions[data-selected="true"] .option-card__art img {
-  animation: crumb-burst 450ms var(--ease-pop) both;
+  animation: acid-pop 450ms var(--ease-pop) both;
 }
 
 .mascot-onions[data-selected="true"] .option-card__burst {
@@ -217,7 +217,7 @@
 }
 
 .mascot-spicy[data-selected="true"] .option-card__art img {
-  animation: flame-pop 430ms var(--ease-pop) both;
+  animation: heat-wiggle 430ms var(--ease-page) both;
 }
 
 ::view-transition-old(order-card),
@@ -669,6 +669,12 @@ html[data-transition="review-to-customize"]::view-transition-new(order-card) {
   .confetti-burst,
   .option-card__burst {
     display: none;
+  }
+
+  .option-card[data-selected="true"] .option-card__art img,
+  .option-card__art::before,
+  .option-card__art::after {
+    animation: none;
   }
 
   ::view-transition-old(order-card),

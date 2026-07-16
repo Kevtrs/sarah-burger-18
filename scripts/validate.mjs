@@ -48,6 +48,79 @@ async function waitForTicketStatus(page, text) {
   await page.locator(".ticket .status-pill", { hasText: text }).waitFor();
 }
 
+async function assertMascotVisible(page, card, label) {
+  await page.waitForTimeout(650);
+
+  const metrics = await card.locator(".option-card__art img").evaluate((img) => {
+    const style = window.getComputedStyle(img);
+    const rect = img.getBoundingClientRect();
+
+    return {
+      animationName: style.animationName,
+      display: style.display,
+      height: rect.height,
+      opacity: Number(style.opacity),
+      visibility: style.visibility,
+      width: rect.width,
+    };
+  });
+
+  if (
+    metrics.display === "none" ||
+    metrics.visibility === "hidden" ||
+    metrics.opacity < 0.95 ||
+    metrics.width < 8 ||
+    metrics.height < 8
+  ) {
+    throw new Error(`${label} mascot is not visible: ${JSON.stringify(metrics)}`);
+  }
+
+  return metrics;
+}
+
+async function exerciseMascotSelection(page) {
+  const toppingCards = page.locator("button.choice-card");
+  const sauceCards = page.locator("button.sauce-card");
+  const onionsCard = toppingCards.nth(2);
+  const spicyCard = sauceCards.nth(4);
+
+  await onionsCard.click();
+  const onionsSelected = await assertMascotVisible(page, onionsCard, "Oignons frits selected");
+  await onionsCard.click();
+  const onionsUnselected = await assertMascotVisible(page, onionsCard, "Oignons frits unselected");
+  await onionsCard.click();
+  const onionsSelectedAgain = await assertMascotVisible(page, onionsCard, "Oignons frits selected again");
+  await onionsCard.click();
+
+  await spicyCard.click();
+  const spicySelected = await assertMascotVisible(page, spicyCard, "Sauce piquante selected");
+  await sauceCards.nth(0).click();
+  const spicyUnselected = await assertMascotVisible(page, spicyCard, "Sauce piquante unselected");
+  await spicyCard.click();
+  const spicySelectedAgain = await assertMascotVisible(page, spicyCard, "Sauce piquante selected again");
+
+  return {
+    onionsSelected,
+    onionsUnselected,
+    onionsSelectedAgain,
+    spicySelected,
+    spicyUnselected,
+    spicySelectedAgain,
+  };
+}
+
+async function submitOrderFromPage(page, guestName, toppingIndex, sauceIndex) {
+  await page.goto(`${appUrl}/#commande`);
+  await page.locator('input[placeholder="Ex. Sarah"]').fill(guestName);
+  await page.getByRole("button", { name: "Continuer" }).click();
+  await page.locator("button.choice-card").first().waitFor();
+  await page.locator("button.choice-card").nth(toppingIndex).click();
+  await page.locator("button.sauce-card").nth(sauceIndex).click();
+  await page.getByRole("button", { name: "Continuer" }).click();
+  await page.getByRole("button", { name: "Envoyer" }).click();
+  await page.locator(".order-number").waitFor();
+}
+
 function recordErrors(page, errors) {
   page.on("console", (message) => {
     if (message.type() === "error") errors.push(message.text());
@@ -66,6 +139,63 @@ async function run() {
     deviceScaleFactor: 2,
     isMobile: true,
   });
+  await mobileContext.addInitScript(() => {
+    window.__newOrderDingStarts = 0;
+
+    class TestAudioNode {
+      connect() {}
+    }
+
+    class TestGain extends TestAudioNode {
+      constructor() {
+        super();
+        this.gain = {
+          exponentialRampToValueAtTime() {},
+          setValueAtTime() {},
+        };
+      }
+    }
+
+    class TestOscillator extends TestAudioNode {
+      constructor() {
+        super();
+        this.frequency = {
+          exponentialRampToValueAtTime() {},
+          setValueAtTime() {},
+        };
+        this.type = "sine";
+      }
+
+      start() {
+        window.__newOrderDingStarts += 1;
+      }
+
+      stop() {}
+    }
+
+    class TestAudioContext {
+      constructor() {
+        this.currentTime = 0;
+        this.destination = {};
+        this.state = "running";
+      }
+
+      createGain() {
+        return new TestGain();
+      }
+
+      createOscillator() {
+        return new TestOscillator();
+      }
+
+      resume() {
+        return Promise.resolve();
+      }
+    }
+
+    window.AudioContext = TestAudioContext;
+    window.webkitAudioContext = TestAudioContext;
+  });
   const page = await mobileContext.newPage();
   recordErrors(page, consoleErrors);
 
@@ -76,6 +206,7 @@ async function run() {
 
   const toppingCards = page.locator("button.choice-card");
   if ((await toppingCards.count()) !== 3) throw new Error("Expected 3 topping cards.");
+  const mascotMetrics = await exerciseMascotSelection(page);
   await toppingCards.nth(1).click();
 
   const sauceCards = page.locator("button.sauce-card");
@@ -94,16 +225,78 @@ async function run() {
 
   await openKitchen(page);
   await page.locator(".ticket").waitFor();
+  await page.waitForTimeout(800);
 
-  const kitchenBefore = await page.locator(".ticket").innerText();
-  await page.locator(".ticket footer .primary-action").click();
+  const initialSoundStarts = await page.evaluate(() => window.__newOrderDingStarts || 0);
+  if (initialSoundStarts !== 0) {
+    throw new Error("Kitchen sound played during the first orders snapshot.");
+  }
+
+  const remoteOrderPage = await mobileContext.newPage();
+  recordErrors(remoteOrderPage, consoleErrors);
+  await submitOrderFromPage(remoteOrderPage, "Mila", 0, 0);
+  await remoteOrderPage.close();
+
+  await page.locator(".ticket", { hasText: "Mila" }).waitFor();
+  await page.waitForTimeout(900);
+
+  const soundAfterNewOrder = await page.evaluate(() => window.__newOrderDingStarts || 0);
+  if (soundAfterNewOrder !== 2) {
+    throw new Error(`Expected one new-order ding, got ${soundAfterNewOrder} oscillator starts.`);
+  }
+
+  const kitchenBefore = await page.locator(".ticket").first().innerText();
+  await page.locator(".ticket footer .primary-action").first().click();
   await waitForTicketStatus(page, "En préparation");
-  await page.locator(".ticket footer .primary-action").click();
+  await page.waitForTimeout(800);
+
+  const soundAfterStatusChange = await page.evaluate(() => window.__newOrderDingStarts || 0);
+  if (soundAfterStatusChange !== soundAfterNewOrder) {
+    throw new Error("Kitchen sound replayed after a status change.");
+  }
+
+  const soundToggle = page.locator('button[aria-pressed]');
+  if ((await soundToggle.count()) !== 1) throw new Error("Kitchen sound toggle not found.");
+  await soundToggle.click();
+  const storedSoundOff = await page.evaluate(() =>
+    window.localStorage.getItem("sarah-burger-kitchen-sound-enabled"),
+  );
+  if (storedSoundOff !== "off") throw new Error("Kitchen sound preference was not stored as off.");
+
+  const mutedOrderPage = await mobileContext.newPage();
+  recordErrors(mutedOrderPage, consoleErrors);
+  await submitOrderFromPage(mutedOrderPage, "Lou", 2, 4);
+  await mutedOrderPage.close();
+
+  await page.locator(".ticket", { hasText: "Lou" }).waitFor();
+  await page.waitForTimeout(900);
+
+  const soundAfterMutedOrder = await page.evaluate(() => window.__newOrderDingStarts || 0);
+  if (soundAfterMutedOrder !== soundAfterNewOrder) {
+    throw new Error("Kitchen sound played while muted.");
+  }
+
+  await soundToggle.click();
+  const storedSoundOn = await page.evaluate(() =>
+    window.localStorage.getItem("sarah-burger-kitchen-sound-enabled"),
+  );
+  if (storedSoundOn !== "on") throw new Error("Kitchen sound preference was not stored as on.");
+
+  await page.reload();
+  await openKitchen(page);
+  await page.locator('button[aria-pressed="true"]', { hasText: "Son" }).waitFor();
+  await page.waitForTimeout(800);
+  const soundAfterReload = await page.evaluate(() => window.__newOrderDingStarts || 0);
+  if (soundAfterReload !== 0) {
+    throw new Error("Kitchen sound played after reloading existing orders.");
+  }
+
+  await page.locator(".ticket footer .primary-action").first().click();
   await waitForTicketStatus(page, "Prête");
-  await page.locator(".ticket footer .primary-action").click();
+  await page.locator(".ticket footer .primary-action").first().click();
   await page.getByRole("tab", { name: "Servies" }).click();
   await waitForTicketStatus(page, "Servie");
-  const kitchenAfter = await page.locator(".ticket").innerText();
+  const kitchenAfter = await page.locator(".ticket").first().innerText();
 
   if (!kitchenAfter.includes("Servie")) {
     throw new Error("Kitchen status did not advance to served.");
@@ -138,12 +331,31 @@ async function run() {
     if (orderMetrics.overflowing) {
       throw new Error(`Order layout overflows horizontally at ${viewport.name}.`);
     }
+    await viewportPage.locator('input[placeholder="Ex. Sarah"]').fill("Vue");
+    await viewportPage.getByRole("button", { name: "Continuer" }).click();
+    await viewportPage.locator("button.choice-card").nth(2).click();
+    const viewportOnions = await assertMascotVisible(
+      viewportPage,
+      viewportPage.locator("button.choice-card").nth(2),
+      `Oignons frits ${viewport.name}`,
+    );
+    await viewportPage.locator("button.sauce-card").nth(4).click();
+    const viewportSpicy = await assertMascotVisible(
+      viewportPage,
+      viewportPage.locator("button.sauce-card").nth(4),
+      `Sauce piquante ${viewport.name}`,
+    );
     await openKitchen(viewportPage);
     const kitchenMetrics = await checkOverflow(viewportPage);
     if (kitchenMetrics.overflowing) {
       throw new Error(`Kitchen layout overflows horizontally at ${viewport.name}.`);
     }
-    viewportMetrics.push({ name: viewport.name, orderMetrics, kitchenMetrics });
+    viewportMetrics.push({
+      name: viewport.name,
+      orderMetrics,
+      kitchenMetrics,
+      mascotMetrics: { onions: viewportOnions, spicy: viewportSpicy },
+    });
     await context.close();
   }
 
@@ -171,6 +383,16 @@ async function run() {
         guestConfirmation,
         kitchenBefore,
         kitchenAfter,
+        mascotMetrics,
+        kitchenSound: {
+          initialSoundStarts,
+          soundAfterNewOrder,
+          soundAfterStatusChange,
+          soundAfterMutedOrder,
+          soundAfterReload,
+          storedSoundOff,
+          storedSoundOn,
+        },
         mobileMetrics,
         desktopMetrics,
         viewportMetrics,
