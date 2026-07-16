@@ -1,0 +1,109 @@
+body {
+  position: relative;
+  background:
+    linear-gradient(90deg, rgba(255, 250, 240, 0.72), rgba(255, 250, 240, 0.32) 28%, rgba(255, 250, 240, 0.72) 72%),
+    linear-gradient(135deg, rgba(255, 250, 240, 0.82), rgba(247, 236, 202, 0.78)),
+    var(--checker-image) center / 680px auto fixed;
+}
+
+body::before,
+body::after {
+  pointer-events: none;
+  position: fixed;
+  content: "";
+}
+
+body::before {
+  inset: 0 auto 0 50%;
+  z-index: 0;
+  width: min(660px, 100%);
+  border-right: 1px solid rgba(23, 18, 15, 0.06);
+  border-left: 1px solid rgba(23, 18, 15, 0.06);
+  background: rgba(255, 250, 240, 0.58);
+  transform: translateX(-50%);
+}
+
+body::after {
+  top: 18%;
+  left: 50%;
+  z-index: 0;
+  width: min(520px, 92%);
+  height: 42%;
+  border: 2px solid rgba(23, 18, 15, 0.08);
+  border-right: 0;
+  border-left: 0;
+  opacity: 0.28;
+  transform: translateX(-50%) rotate(-4deg);
+  animation: background-drift 18s var(--ease-page) infinite alternate;
+}
+
+.app-shell {
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+  width: min(1180px, 100%);
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: 12px 10px 96px;
+}
+
+.ambient-stickers {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+}
+
+.ambient-stickers span {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: var(--border-thin);
+  opacity: 0.2;
+  transform: rotate(45deg);
+}
+
+.ambient-stickers span:nth-child(1) {
+  top: 24%;
+  left: calc(50% - 250px);
+  background: var(--color-yellow);
+  animation: quiet-float 8s var(--ease-page) infinite;
+}
+
+.ambient-stickers span:nth-child(2) {
+  right: calc(50% - 245px);
+  bottom: 18%;
+  width: 20px;
+  height: 20px;
+  background: var(--color-red);
+  animation: quiet-float 10s var(--ease-page) 800ms infinite;
+}
+
+.ambient-stickers span:nth-child(3) {
+  display: none;
+}
+
+@keyframes background-drift {
+  to {
+    transform: translateX(-50%) translateY(-10px) rotate(-3deg);
+  }
+}
+
+@keyframes quiet-float {
+  50% {
+    transform: translateY(-8px) rotate(49deg);
+  }
+}
+
+@media (min-width: 720px) {
+  .app-shell {
+    padding: 18px 22px 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::after,
+  .ambient-stickers span {
+    animation: none;
+  }
+}

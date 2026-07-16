@@ -1,0 +1,250 @@
+.review-layout {
+  display: grid;
+  gap: 13px;
+  padding: 16px 12px 14px;
+}
+
+.review-copy {
+  position: relative;
+  min-height: 108px;
+  padding-right: 96px;
+}
+
+.review-copy h1 {
+  max-width: 10ch;
+  margin-bottom: 6px;
+}
+
+.review-copy p:not(.eyebrow) {
+  max-width: 24ch;
+  margin-bottom: 0;
+  font-weight: 900;
+}
+
+.review-copy img {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  width: 82px;
+  height: 82px;
+  object-fit: contain;
+  transform: rotate(7deg);
+}
+
+.ticket-printer {
+  position: relative;
+  padding-top: 18px;
+  view-transition-name: order-ticket;
+}
+
+.ticket-slot {
+  position: absolute;
+  top: 0;
+  right: 26px;
+  left: 26px;
+  z-index: 2;
+  height: 22px;
+  border: var(--border-standard);
+  border-radius: 7px 7px 3px 3px;
+  background:
+    linear-gradient(#15100e, #2f251f 58%, #15100e);
+  box-shadow: inset 0 -5px 0 rgba(255, 255, 255, 0.08);
+}
+
+.order-ticket {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  padding: 26px 14px 16px;
+  border: var(--border-standard);
+  border-radius: 3px;
+  background:
+    repeating-linear-gradient(0deg, rgba(23, 18, 15, 0.035) 0 1px, transparent 1px 11px),
+    linear-gradient(180deg, white, #fffdf7);
+  box-shadow: var(--shadow-medium);
+  clip-path: polygon(
+    0 8px,
+    3% 0,
+    6% 8px,
+    9% 0,
+    12% 8px,
+    15% 0,
+    18% 8px,
+    21% 0,
+    24% 8px,
+    27% 0,
+    30% 8px,
+    33% 0,
+    36% 8px,
+    39% 0,
+    42% 8px,
+    45% 0,
+    48% 8px,
+    51% 0,
+    54% 8px,
+    57% 0,
+    60% 8px,
+    63% 0,
+    66% 8px,
+    69% 0,
+    72% 8px,
+    75% 0,
+    78% 8px,
+    81% 0,
+    84% 8px,
+    87% 0,
+    90% 8px,
+    93% 0,
+    96% 8px,
+    100% 0,
+    100% calc(100% - 8px),
+    97% 100%,
+    94% calc(100% - 8px),
+    91% 100%,
+    88% calc(100% - 8px),
+    85% 100%,
+    82% calc(100% - 8px),
+    79% 100%,
+    76% calc(100% - 8px),
+    73% 100%,
+    70% calc(100% - 8px),
+    67% 100%,
+    64% calc(100% - 8px),
+    61% 100%,
+    58% calc(100% - 8px),
+    55% 100%,
+    52% calc(100% - 8px),
+    49% 100%,
+    46% calc(100% - 8px),
+    43% 100%,
+    40% calc(100% - 8px),
+    37% 100%,
+    34% calc(100% - 8px),
+    31% 100%,
+    28% calc(100% - 8px),
+    25% 100%,
+    22% calc(100% - 8px),
+    19% 100%,
+    16% calc(100% - 8px),
+    13% 100%,
+    10% calc(100% - 8px),
+    7% 100%,
+    4% calc(100% - 8px),
+    0 100%
+  );
+  transform-origin: top center;
+  animation: ticket-print 560ms var(--ease-page) both, ticket-settle 360ms var(--ease-pop) 560ms both;
+}
+
+.order-ticket::before,
+.order-ticket::after {
+  pointer-events: none;
+  position: absolute;
+  right: 12px;
+  left: 12px;
+  height: 4px;
+  background: repeating-linear-gradient(90deg, rgba(23, 18, 15, 0.38) 0 8px, transparent 8px 17px);
+  content: "";
+}
+
+.order-ticket::before {
+  top: 12px;
+}
+
+.order-ticket::after {
+  bottom: 12px;
+}
+
+.order-ticket__header {
+  display: grid;
+  gap: 2px;
+  padding-bottom: 9px;
+  border-bottom: 2px dashed rgba(23, 18, 15, 0.32);
+}
+
+.order-ticket__header strong {
+  font-size: 0.92rem;
+  letter-spacing: 0;
+}
+
+.order-ticket__header span {
+  color: var(--color-red);
+  font-size: 0.72rem;
+  font-weight: 1000;
+  text-transform: uppercase;
+}
+
+.order-ticket__meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  color: var(--color-muted);
+  font-family: "Courier New", monospace;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.order-ticket dl {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.order-ticket dl div {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 9px;
+  padding: 11px 0;
+  border-top: 2px dashed rgba(216, 201, 159, 0.9);
+}
+
+.order-ticket dl div:first-child {
+  border-top: 0;
+}
+
+.ticket-stamp {
+  position: absolute;
+  top: 50px;
+  right: 14px;
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  padding: 0 8px;
+  border: 3px solid var(--color-hot);
+  border-radius: 5px;
+  color: var(--color-hot);
+  font-size: 0.7rem;
+  font-weight: 1000;
+  text-transform: uppercase;
+  transform: rotate(4deg);
+  opacity: 0.9;
+  animation: stamp-hit 280ms var(--ease-pop) 680ms both;
+}
+
+.ticket-success .ticket-stamp {
+  border-color: var(--color-green);
+  color: var(--color-green);
+}
+
+@media (min-width: 720px) {
+  .review-layout {
+    grid-template-columns: minmax(0, 0.78fr) minmax(360px, 1fr);
+    align-items: center;
+    padding: 18px 16px 16px;
+  }
+
+  .review-copy {
+    min-height: 150px;
+    padding-right: 118px;
+  }
+
+  .review-copy h1 {
+    max-width: 8ch;
+    font-size: 2.8rem;
+  }
+
+  .review-copy img {
+    width: 104px;
+    height: 104px;
+  }
+}
