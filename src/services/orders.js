@@ -19,8 +19,23 @@ import {
 } from "./session";
 
 const LOCAL_EVENT = "sarah-burger-local-orders-changed";
+const INVALID_FIREBASE_KEY = /[.#$[\]/]/;
 const allowedToppings = ["pickles", "jalapenos", "onions"];
 const allowedStatuses = ["received", "preparing", "ready", "served", "cancelled"];
+
+export function assertValidFirebaseKey(value, label) {
+  if (
+    typeof value !== "string" ||
+    value.length < 1 ||
+    INVALID_FIREBASE_KEY.test(value)
+  ) {
+    throw new Error(`${label} invalide pour Firebase: ${JSON.stringify(value)}`);
+  }
+}
+
+function assertSessionKey() {
+  assertValidFirebaseKey(sessionId, "sessionId");
+}
 
 function cleanName(name) {
   return name.trim().replace(/\s+/g, " ").slice(0, 32);
@@ -92,10 +107,33 @@ async function assertFirebaseConnected(db) {
     throw new Error("Connexion indisponible. Réessaie quand le réseau revient.");
   }
 
-  const snapshot = await get(ref(db, ".info/connected"));
-  if (snapshot.val() !== true) {
-    throw new Error("Firebase n'est pas joignable pour le moment.");
-  }
+  await new Promise((resolve, reject) => {
+    const connectedRef = ref(db, ".info/connected");
+    let unsubscribe;
+    const timeout = window.setTimeout(() => {
+      unsubscribe?.();
+      reject(new Error("Firebase n'est pas joignable pour le moment."));
+    }, 5000);
+
+    unsubscribe = onValue(
+      connectedRef,
+      (snapshot) => {
+        window.clearTimeout(timeout);
+        unsubscribe?.();
+        if (snapshot.val() === true) {
+          resolve();
+        } else {
+          reject(new Error("Firebase n'est pas joignable pour le moment."));
+        }
+      },
+      (error) => {
+        window.clearTimeout(timeout);
+        unsubscribe?.();
+        reject(error);
+      },
+      { onlyOnce: true },
+    );
+  });
 }
 
 function makeFirebaseOrderStore() {
@@ -115,7 +153,13 @@ function makeFirebaseOrderStore() {
       await assertFirebaseConnected(db);
 
       const clientRequestId = normalizeClientRequestId(input.clientRequestId);
-      const orderRef = ref(db, sessionPath(`orders/${clientRequestId}`));
+      const orderId = clientRequestId;
+      assertSessionKey();
+      assertValidFirebaseKey(orderId, "orderId");
+      assertValidFirebaseKey(clientRequestId, "clientRequestId");
+
+      const orderPath = sessionPath(`orders/${orderId}`);
+      const orderRef = ref(db, orderPath);
       const existingOrder = await get(orderRef);
 
       if (existingOrder.exists()) {
@@ -150,6 +194,7 @@ function makeFirebaseOrderStore() {
 
     subscribeOrders(onChange, onError) {
       const { db } = requireFirebaseRuntime();
+      assertSessionKey();
       const ordersRef = ref(db, sessionPath("orders"));
       const unsubscribe = onValue(
         ordersRef,
@@ -165,6 +210,8 @@ function makeFirebaseOrderStore() {
 
     subscribeOrder(orderId, onChange, onError) {
       const { db } = requireFirebaseRuntime();
+      assertSessionKey();
+      assertValidFirebaseKey(orderId, "orderId");
       const orderRef = ref(db, sessionPath(`orders/${orderId}`));
       const unsubscribe = onValue(
         orderRef,
@@ -180,6 +227,8 @@ function makeFirebaseOrderStore() {
     async updateStatus(orderId, status) {
       if (!allowedStatuses.includes(status)) throw new Error("Statut invalide.");
       const { db } = requireFirebaseRuntime();
+      assertSessionKey();
+      assertValidFirebaseKey(orderId, "orderId");
       await update(ref(db, sessionPath(`orders/${orderId}`)), {
         status,
         updatedAtMs: serverTimestamp(),
