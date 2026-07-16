@@ -212,6 +212,7 @@ export function GuestOrder({ store }) {
 
       submitTimersRef.current = [revealTimer, confettiTimer];
     } catch (err) {
+      console.error("ORDER SUBMIT ERROR", err);
       setError(err.message || "La commande n'a pas pu être envoyée.");
       setSubmitState("error");
       setIsSubmitting(false);
