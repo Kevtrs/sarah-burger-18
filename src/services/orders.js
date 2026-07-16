@@ -224,6 +224,22 @@ function makeFirebaseOrderStore() {
       return () => unsubscribe?.();
     },
 
+    subscribeOrderStatus(orderId, onChange, onError) {
+      const { db } = requireFirebaseRuntime();
+      assertSessionKey();
+      assertValidFirebaseKey(orderId, "orderId");
+      const statusRef = ref(db, sessionPath(`orders/${orderId}/status`));
+      const unsubscribe = onValue(
+        statusRef,
+        (snapshot) => {
+          if (snapshot.exists()) onChange(snapshot.val());
+        },
+        onError,
+      );
+
+      return () => unsubscribe?.();
+    },
+
     async updateStatus(orderId, status) {
       if (!allowedStatuses.includes(status)) throw new Error("Statut invalide.");
       const { db } = requireFirebaseRuntime();
@@ -351,6 +367,13 @@ function makeLocalStore() {
       return subscribeLocal((orders) => {
         const order = orders.find((item) => item.id === orderId);
         if (order) onChange(order);
+      });
+    },
+
+    subscribeOrderStatus(orderId, onChange) {
+      return subscribeLocal((orders) => {
+        const order = orders.find((item) => item.id === orderId);
+        if (order) onChange(order.status);
       });
     },
 

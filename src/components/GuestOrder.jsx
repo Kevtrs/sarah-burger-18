@@ -1,5 +1,7 @@
 import {
   ArrowLeft,
+  Bell,
+  BellRing,
   Check,
   CheckCircle2,
   RotateCcw,
@@ -18,6 +20,7 @@ import {
   statuses,
   toppings,
 } from "../data/menu";
+import { useReadyOrderAlert } from "../hooks/useReadyOrderAlert";
 
 const steps = ["identity", "customize", "review", "done"];
 const progressLabels = ["Prénom", "Burger", "Validation"];
@@ -78,6 +81,8 @@ export function GuestOrder({ store }) {
   });
   const submitTimersRef = useRef([]);
   const clientRequestIdRef = useRef(crypto.randomUUID?.() || `order-${Date.now()}`);
+  const hasResumedOrderRef = useRef(false);
+  const readyAlert = useReadyOrderAlert(store);
 
   const selectedToppingLabels = useMemo(
     () => getToppingLabels(selectedToppings),
@@ -86,11 +91,31 @@ export function GuestOrder({ store }) {
   const selectedSauceLabel = useMemo(() => getSauceLabel(selectedSauce), [selectedSauce]);
 
   useEffect(() => {
-    if (!order?.id) return undefined;
-    return store.subscribeOrder(order.id, setOrder, (err) => {
-      setError(err.message || "Impossible de suivre la commande.");
+    const tracked = readyAlert.trackedOrder;
+    if (hasResumedOrderRef.current || order || step !== "identity" || !tracked?.orderId) return;
+
+    hasResumedOrderRef.current = true;
+    sessionStorage.setItem(introStorageKey, "yes");
+    setShowIntro(false);
+    setOrder({
+      guestName: tracked.guestName || "",
+      id: tracked.orderId,
+      number: tracked.number,
+      status: readyAlert.currentStatus || tracked.lastStatus || "received",
     });
-  }, [order?.id, store]);
+    setStep("done");
+  }, [order, readyAlert.currentStatus, readyAlert.trackedOrder, step]);
+
+  useEffect(() => {
+    if (!order?.id || !readyAlert.currentStatus) return;
+
+    setOrder((current) => {
+      if (!current || current.id !== order.id || current.status === readyAlert.currentStatus) {
+        return current;
+      }
+      return { ...current, status: readyAlert.currentStatus };
+    });
+  }, [order?.id, readyAlert.currentStatus]);
 
   useEffect(() => store.subscribeConnection?.(setIsOnline), [store]);
 
@@ -191,6 +216,7 @@ export function GuestOrder({ store }) {
         clientRequestId: clientRequestIdRef.current,
       });
 
+      readyAlert.trackOrder(created);
       setSubmitState("success");
       setShowConfetti(true);
 
@@ -223,6 +249,7 @@ export function GuestOrder({ store }) {
 
   function reset() {
     clearSubmitTimers();
+    readyAlert.clearTrackedOrder();
     withViewTransition(() => {
       flushSync(() => {
         setStep("identity");
@@ -439,10 +466,16 @@ export function GuestOrder({ store }) {
       )}
 
       {step === "done" && order && (
-        <section className="order-screen done-layout success-scene" aria-labelledby="done-title" aria-live="polite">
+        <section
+          className={`order-screen done-layout success-scene ${
+            order.status === "ready" || readyAlert.readyAnnounced ? "ready-alert-fired" : ""
+          }`}
+          aria-labelledby="done-title"
+          aria-live="polite"
+        >
           <div className="success-copy">
             <p className="eyebrow">Ticket validé</p>
-            <h1 id="done-title">Commande envoyée</h1>
+            <h1 id="done-title">{order.status === "ready" ? "Ta commande est prête !" : "Commande envoyée"}</h1>
           </div>
           <div className="number-stage success-number-wrap" aria-label={`Numéro de commande ${order.number}`}>
             <span className="success-number__burst" aria-hidden="true" />
@@ -450,7 +483,11 @@ export function GuestOrder({ store }) {
             <span className="order-number success-number">#{order.number}</span>
             <img className="success-mascot success-mascot-right" src={assetPath("onions.svg")} alt="" aria-hidden="true" />
           </div>
-          <p className="success-note muted">Ta commande entre en cuisine. Garde bien ton numéro.</p>
+          <p className="success-note muted">
+            {order.status === "ready"
+              ? "Viens la récupérer au stand Sarah Burger."
+              : "Ta commande entre en cuisine. Garde bien ton numéro."}
+          </p>
           <div className="success-ticket" aria-hidden="true">
             <span>SARAH BURGER</span>
             <strong>#{order.number}</strong>
@@ -458,8 +495,9 @@ export function GuestOrder({ store }) {
           </div>
           <StatusPill status={order.status} />
           {order.status === "ready" && (
-            <InlineNotice tone="success">Ton burger est prêt au stand.</InlineNotice>
+            <InlineNotice tone="success">Ta commande est prête !</InlineNotice>
           )}
+          <ReadyAlertPanel order={order} readyAlert={readyAlert} />
         </section>
       )}
 
@@ -632,6 +670,55 @@ function OrderSummary({ guestName, toppings: toppingLabels, sauce, submitState }
 function StatusPill({ status }) {
   const current = statuses[status] || statuses.received;
   return <span className={`status-pill status-${current.color}`}>{current.label}</span>;
+}
+
+function ReadyAlertPanel({ order, readyAlert }) {
+  const isReady = order.status === "ready";
+  const isFinished = order.status === "served" || order.status === "cancelled";
+  const watchEnabled = readyAlert.trackedOrder?.watchEnabled === true;
+  const notificationsEnabled = readyAlert.trackedOrder?.notificationsEnabled === true;
+  const showFallbackMessage =
+    watchEnabled &&
+    (!readyAlert.notificationSupported || readyAlert.permission === "denied" || !notificationsEnabled);
+
+  return (
+    <div className={`ready-alert-panel ${isReady ? "ready" : ""}`} aria-live="polite">
+      {isReady ? (
+        <strong>Ta commande est prête !</strong>
+      ) : (
+        <p>On peut te prévenir dès que le stand passe ta commande en prête.</p>
+      )}
+
+      {!isReady && !isFinished && !watchEnabled && (
+        <button className="secondary-action compact ready-alert-button" type="button" onClick={readyAlert.enableAlerts}>
+          <Bell aria-hidden="true" />
+          M’avertir quand c’est prêt
+        </button>
+      )}
+
+      {!isReady && !isFinished && watchEnabled && (
+        <span className="ready-alert-state">
+          <BellRing aria-hidden="true" />
+          {notificationsEnabled ? "Alerte activée" : "Alerte dans cette page"}
+        </span>
+      )}
+
+      {readyAlert.message && <small>{readyAlert.message}</small>}
+      {showFallbackMessage && <small>Garde cette page ouverte pour être averti.</small>}
+      {readyAlert.isIosDevice && (
+        <small>Sur iPhone, ajoute Sarah Burger à ton écran d’accueil pour recevoir l’alerte même en quittant Safari.</small>
+      )}
+      {readyAlert.canTestNotification && !isFinished && (
+        <button
+          className="secondary-action compact ready-alert-test"
+          type="button"
+          onClick={() => readyAlert.fireReadyAlert({ test: true })}
+        >
+          Tester la notification
+        </button>
+      )}
+    </div>
+  );
 }
 
 function InlineNotice({ tone, children }) {

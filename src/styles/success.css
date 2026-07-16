@@ -136,6 +136,86 @@
   font-weight: 1000;
 }
 
+.ready-alert-panel {
+  display: grid;
+  width: min(310px, 100%);
+  gap: 7px;
+  justify-items: center;
+  padding: 10px;
+  border: var(--border-thin);
+  border-radius: var(--radius-small);
+  background: rgba(255, 255, 255, 0.76);
+  box-shadow: var(--shadow-small);
+}
+
+.ready-alert-panel p,
+.ready-alert-panel small,
+.ready-alert-panel strong {
+  margin: 0;
+}
+
+.ready-alert-panel p {
+  max-width: 28ch;
+  color: var(--color-muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1.18;
+}
+
+.ready-alert-panel strong {
+  color: var(--color-green);
+  font-size: 1rem;
+  font-weight: 1000;
+}
+
+.ready-alert-panel small {
+  color: var(--color-muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1.16;
+}
+
+.ready-alert-panel .secondary-action {
+  min-width: 0;
+}
+
+.ready-alert-state {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  border: var(--border-thin);
+  border-radius: var(--radius-small);
+  background: var(--color-green-soft);
+  font-size: 0.78rem;
+  font-weight: 1000;
+}
+
+.ready-alert-state svg,
+.ready-alert-button svg,
+.ready-alert-test svg {
+  width: 17px;
+  height: 17px;
+}
+
+.ready-alert-fired .success-number {
+  animation:
+    success-circle-reveal 720ms var(--ease-pop) both,
+    ready-alert-pulse 980ms var(--ease-pop) 120ms 2;
+}
+
+.ready-alert-fired .success-number__burst {
+  background:
+    repeating-conic-gradient(
+      from 12deg,
+      rgba(43, 174, 102, 0.2) 0 9deg,
+      rgba(255, 250, 240, 0.2) 9deg 18deg,
+      rgba(31, 110, 199, 0.16) 18deg 27deg,
+      rgba(244, 195, 63, 0.24) 27deg 36deg
+    );
+}
+
 .confetti-burst {
   pointer-events: none;
   position: fixed;
@@ -153,6 +233,16 @@
   background: var(--confetti-color);
   opacity: 0;
   animation: confetti-burst 820ms var(--ease-page) var(--confetti-delay) forwards;
+}
+
+@keyframes ready-alert-pulse {
+  50% {
+    box-shadow:
+      var(--shadow-strong),
+      0 0 0 13px rgba(74, 190, 116, 0.22),
+      0 0 0 22px rgba(255, 250, 240, 0.72);
+    transform: scale(1.035);
+  }
 }
 
 @media (min-width: 720px) {
@@ -185,5 +275,9 @@
 @media (prefers-reduced-motion: reduce) {
   .confetti-burst {
     display: none;
+  }
+
+  .ready-alert-fired .success-number {
+    animation: none;
   }
 }

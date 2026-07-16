@@ -110,8 +110,19 @@ async function exerciseMascotSelection(page) {
 }
 
 async function submitOrderFromPage(page, guestName, toppingIndex, sauceIndex) {
+  await page.addInitScript(() => {
+    window.localStorage.removeItem("sarah-burger-ready-alert-v1");
+  });
   await page.goto(`${appUrl}/#commande`);
-  await page.locator('input[placeholder="Ex. Sarah"]').fill(guestName);
+  const nameInput = page.locator('input[placeholder="Ex. Sarah"]');
+  await page.locator('input[placeholder="Ex. Sarah"], .success-scene').first().waitFor();
+  if ((await nameInput.count()) === 0) {
+    const resetButton = page.getByRole("button", { name: "Nouvelle commande" });
+    if ((await resetButton.count()) > 0) {
+      await resetButton.click();
+    }
+  }
+  await nameInput.fill(guestName);
   await page.getByRole("button", { name: "Continuer" }).click();
   await page.locator("button.choice-card").first().waitFor();
   await page.locator("button.choice-card").nth(toppingIndex).click();
@@ -195,6 +206,47 @@ async function run() {
 
     window.AudioContext = TestAudioContext;
     window.webkitAudioContext = TestAudioContext;
+    window.__notificationRequests = 0;
+    window.__readyAlertSoundPlays = 0;
+    window.__readyNotifications = [];
+    window.__readyVibrations = [];
+    window.__nextNotificationPermission = "granted";
+
+    class TestNotification {
+      static permission = "default";
+
+      static requestPermission() {
+        window.__notificationRequests += 1;
+        TestNotification.permission = window.__nextNotificationPermission;
+        return Promise.resolve(TestNotification.permission);
+      }
+
+      constructor(title, options = {}) {
+        this.title = title;
+        this.options = options;
+        window.__readyNotifications.push({ title, body: options.body, tag: options.tag });
+      }
+    }
+
+    Object.defineProperty(window, "Notification", {
+      configurable: true,
+      value: TestNotification,
+    });
+
+    Object.defineProperty(navigator, "vibrate", {
+      configurable: true,
+      value(pattern) {
+        window.__readyVibrations.push(pattern);
+        return true;
+      },
+    });
+
+    window.HTMLMediaElement.prototype.play = function play() {
+      if (!this.muted) window.__readyAlertSoundPlays += 1;
+      return Promise.resolve();
+    };
+
+    window.HTMLMediaElement.prototype.pause = function pause() {};
   });
   const page = await mobileContext.newPage();
   recordErrors(page, consoleErrors);
@@ -223,11 +275,31 @@ async function run() {
     status: await page.locator(".status-pill").innerText(),
   };
 
-  await openKitchen(page);
-  await page.locator(".ticket").waitFor();
-  await page.waitForTimeout(800);
+  await page.locator(".ready-alert-button").click();
+  await page.locator(".ready-alert-state", { hasText: "Alerte activée" }).waitFor();
 
-  const initialSoundStarts = await page.evaluate(() => window.__newOrderDingStarts || 0);
+  const readyPermission = await page.evaluate(() => ({
+    notificationRequests: window.__notificationRequests,
+    readyAlertSoundPlays: window.__readyAlertSoundPlays,
+    stored: JSON.parse(window.localStorage.getItem("sarah-burger-ready-alert-v1")),
+  }));
+  if (readyPermission.notificationRequests !== 1) {
+    throw new Error("Ready notification permission was not requested exactly once.");
+  }
+  if (readyPermission.readyAlertSoundPlays !== 0) {
+    throw new Error("Ready alert sound played while only unlocking audio.");
+  }
+  if (!readyPermission.stored?.orderId || readyPermission.stored.notificationsEnabled !== true) {
+    throw new Error("Ready alert preference/order was not stored after permission grant.");
+  }
+
+  const kitchenPage = await mobileContext.newPage();
+  recordErrors(kitchenPage, consoleErrors);
+  await openKitchen(kitchenPage);
+  await kitchenPage.locator(".ticket").waitFor();
+  await kitchenPage.waitForTimeout(800);
+
+  const initialSoundStarts = await kitchenPage.evaluate(() => window.__newOrderDingStarts || 0);
   if (initialSoundStarts !== 0) {
     throw new Error("Kitchen sound played during the first orders snapshot.");
   }
@@ -237,28 +309,86 @@ async function run() {
   await submitOrderFromPage(remoteOrderPage, "Mila", 0, 0);
   await remoteOrderPage.close();
 
-  await page.locator(".ticket", { hasText: "Mila" }).waitFor();
-  await page.waitForTimeout(900);
+  await kitchenPage.locator(".ticket", { hasText: "Mila" }).waitFor();
+  await kitchenPage.waitForTimeout(900);
 
-  const soundAfterNewOrder = await page.evaluate(() => window.__newOrderDingStarts || 0);
+  const soundAfterNewOrder = await kitchenPage.evaluate(() => window.__newOrderDingStarts || 0);
   if (soundAfterNewOrder !== 2) {
     throw new Error(`Expected one new-order ding, got ${soundAfterNewOrder} oscillator starts.`);
   }
 
-  const kitchenBefore = await page.locator(".ticket").first().innerText();
-  await page.locator(".ticket footer .primary-action").first().click();
-  await waitForTicketStatus(page, "En préparation");
-  await page.waitForTimeout(800);
+  const ninaTicket = kitchenPage.locator(".ticket", { hasText: "Nina" });
+  const kitchenBefore = await ninaTicket.innerText();
+  await ninaTicket.locator("footer .primary-action").click();
+  await ninaTicket.locator(".status-pill", { hasText: "En préparation" }).waitFor();
+  await page.waitForTimeout(900);
 
-  const soundAfterStatusChange = await page.evaluate(() => window.__newOrderDingStarts || 0);
+  const readyBeforeReady = await page.evaluate(() => ({
+    notificationCount: window.__readyNotifications.length,
+    soundPlays: window.__readyAlertSoundPlays,
+    title: document.querySelector("#done-title")?.innerText,
+    vibrationCount: window.__readyVibrations.length,
+  }));
+  if (
+    readyBeforeReady.notificationCount !== 0 ||
+    readyBeforeReady.soundPlays !== 0 ||
+    readyBeforeReady.vibrationCount !== 0 ||
+    readyBeforeReady.title !== "Commande envoyée"
+  ) {
+    throw new Error(`Ready alert fired before ready status: ${JSON.stringify(readyBeforeReady)}`);
+  }
+
+  const soundAfterStatusChange = await kitchenPage.evaluate(() => window.__newOrderDingStarts || 0);
   if (soundAfterStatusChange !== soundAfterNewOrder) {
     throw new Error("Kitchen sound replayed after a status change.");
   }
 
-  const soundToggle = page.locator('button[aria-pressed]');
+  await ninaTicket.locator("footer .primary-action").click();
+  await ninaTicket.locator(".status-pill", { hasText: "Prête" }).waitFor();
+  await page.locator("#done-title", { hasText: "Ta commande est prête !" }).waitFor();
+
+  const readyAfterReady = await page.evaluate(() => ({
+    notification: window.__readyNotifications[0],
+    notificationCount: window.__readyNotifications.length,
+    soundPlays: window.__readyAlertSoundPlays,
+    stored: JSON.parse(window.localStorage.getItem("sarah-burger-ready-alert-v1")),
+    title: document.querySelector("#done-title")?.innerText,
+    vibrationCount: window.__readyVibrations.length,
+  }));
+  if (
+    readyAfterReady.notificationCount !== 1 ||
+    readyAfterReady.notification?.title !== "Ton burger est prêt 🍔" ||
+    !readyAfterReady.notification?.body?.includes(guestConfirmation.number) ||
+    readyAfterReady.soundPlays !== 1 ||
+    readyAfterReady.vibrationCount !== 1 ||
+    readyAfterReady.stored?.readyNotified !== true ||
+    readyAfterReady.title !== "Ta commande est prête !"
+  ) {
+    throw new Error(`Ready alert did not fire correctly: ${JSON.stringify(readyAfterReady)}`);
+  }
+
+  await page.reload();
+  await page.locator("#done-title", { hasText: "Ta commande est prête !" }).waitFor();
+  await page.waitForTimeout(900);
+  const readyAfterClientReload = await page.evaluate(() => ({
+    notificationCount: window.__readyNotifications.length,
+    soundPlays: window.__readyAlertSoundPlays,
+    stored: JSON.parse(window.localStorage.getItem("sarah-burger-ready-alert-v1")),
+    vibrationCount: window.__readyVibrations.length,
+  }));
+  if (
+    readyAfterClientReload.notificationCount !== 0 ||
+    readyAfterClientReload.soundPlays !== 0 ||
+    readyAfterClientReload.vibrationCount !== 0 ||
+    readyAfterClientReload.stored?.readyNotified !== true
+  ) {
+    throw new Error(`Ready alert replayed after reload: ${JSON.stringify(readyAfterClientReload)}`);
+  }
+
+  const soundToggle = kitchenPage.locator('button[aria-pressed]');
   if ((await soundToggle.count()) !== 1) throw new Error("Kitchen sound toggle not found.");
   await soundToggle.click();
-  const storedSoundOff = await page.evaluate(() =>
+  const storedSoundOff = await kitchenPage.evaluate(() =>
     window.localStorage.getItem("sarah-burger-kitchen-sound-enabled"),
   );
   if (storedSoundOff !== "off") throw new Error("Kitchen sound preference was not stored as off.");
@@ -268,45 +398,88 @@ async function run() {
   await submitOrderFromPage(mutedOrderPage, "Lou", 2, 4);
   await mutedOrderPage.close();
 
-  await page.locator(".ticket", { hasText: "Lou" }).waitFor();
-  await page.waitForTimeout(900);
+  await kitchenPage.locator(".ticket", { hasText: "Lou" }).waitFor();
+  await kitchenPage.waitForTimeout(900);
 
-  const soundAfterMutedOrder = await page.evaluate(() => window.__newOrderDingStarts || 0);
+  const soundAfterMutedOrder = await kitchenPage.evaluate(() => window.__newOrderDingStarts || 0);
   if (soundAfterMutedOrder !== soundAfterNewOrder) {
     throw new Error("Kitchen sound played while muted.");
   }
 
+  const deniedPage = await mobileContext.newPage();
+  recordErrors(deniedPage, consoleErrors);
+  await submitOrderFromPage(deniedPage, "Noe", 0, 2);
+  await deniedPage.evaluate(() => {
+    window.Notification.permission = "default";
+    window.__nextNotificationPermission = "denied";
+  });
+  await deniedPage.locator(".ready-alert-button").click();
+  await deniedPage.locator(".ready-alert-panel", { hasText: "Garde cette page ouverte" }).waitFor();
+
+  const deniedPermission = await deniedPage.evaluate(() => ({
+    notificationRequests: window.__notificationRequests,
+    stored: JSON.parse(window.localStorage.getItem("sarah-burger-ready-alert-v1")),
+  }));
+  if (
+    deniedPermission.notificationRequests !== 1 ||
+    deniedPermission.stored?.notificationsEnabled !== false ||
+    deniedPermission.stored?.watchEnabled !== true
+  ) {
+    throw new Error(`Denied notification preference was not stored: ${JSON.stringify(deniedPermission)}`);
+  }
+
+  const deniedTicket = kitchenPage.locator(".ticket", { hasText: "Noe" });
+  await deniedTicket.waitFor();
+  await deniedTicket.locator("footer .primary-action").click();
+  await deniedTicket.locator(".status-pill", { hasText: "En préparation" }).waitFor();
+  await deniedTicket.locator("footer .primary-action").click();
+  await deniedTicket.locator(".status-pill", { hasText: "Prête" }).waitFor();
+  await deniedPage.locator("#done-title", { hasText: "Ta commande est prête !" }).waitFor();
+
+  const deniedReadyAlert = await deniedPage.evaluate(() => ({
+    notificationCount: window.__readyNotifications.length,
+    soundPlays: window.__readyAlertSoundPlays,
+    vibrationCount: window.__readyVibrations.length,
+  }));
+  if (
+    deniedReadyAlert.notificationCount !== 0 ||
+    deniedReadyAlert.soundPlays !== 1 ||
+    deniedReadyAlert.vibrationCount !== 1
+  ) {
+    throw new Error(`Denied ready fallback failed: ${JSON.stringify(deniedReadyAlert)}`);
+  }
+  await deniedPage.close();
+
   await soundToggle.click();
-  const storedSoundOn = await page.evaluate(() =>
+  const storedSoundOn = await kitchenPage.evaluate(() =>
     window.localStorage.getItem("sarah-burger-kitchen-sound-enabled"),
   );
   if (storedSoundOn !== "on") throw new Error("Kitchen sound preference was not stored as on.");
 
-  await page.reload();
-  await openKitchen(page);
-  await page.locator('button[aria-pressed="true"]', { hasText: "Son" }).waitFor();
-  await page.waitForTimeout(800);
-  const soundAfterReload = await page.evaluate(() => window.__newOrderDingStarts || 0);
+  await kitchenPage.reload();
+  await openKitchen(kitchenPage);
+  await kitchenPage.locator('button[aria-pressed="true"]', { hasText: "Son" }).waitFor();
+  await kitchenPage.waitForTimeout(800);
+  const soundAfterReload = await kitchenPage.evaluate(() => window.__newOrderDingStarts || 0);
   if (soundAfterReload !== 0) {
     throw new Error("Kitchen sound played after reloading existing orders.");
   }
 
-  await page.locator(".ticket footer .primary-action").first().click();
-  await waitForTicketStatus(page, "Prête");
-  await page.locator(".ticket footer .primary-action").first().click();
-  await page.getByRole("tab", { name: "Servies" }).click();
-  await waitForTicketStatus(page, "Servie");
-  const kitchenAfter = await page.locator(".ticket").first().innerText();
+  const ninaTicketAfterReload = kitchenPage.locator(".ticket", { hasText: "Nina" });
+  await ninaTicketAfterReload.locator("footer .primary-action").click();
+  await kitchenPage.getByRole("tab", { name: "Servies" }).click();
+  await waitForTicketStatus(kitchenPage, "Servie");
+  const kitchenAfter = await kitchenPage.locator(".ticket", { hasText: "Nina" }).innerText();
 
   if (!kitchenAfter.includes("Servie")) {
     throw new Error("Kitchen status did not advance to served.");
   }
 
-  const mobileMetrics = await checkOverflow(page);
+  const mobileMetrics = await checkOverflow(kitchenPage);
   if (mobileMetrics.overflowing) throw new Error("Mobile layout overflows horizontally.");
 
   const mobileShot = path.join(screenshotDir, "mobile-kitchen.png");
-  await page.screenshot({ path: mobileShot, fullPage: true });
+  await kitchenPage.screenshot({ path: mobileShot, fullPage: true });
   await mobileContext.close();
 
   const viewportMetrics = [];
@@ -392,6 +565,14 @@ async function run() {
           soundAfterReload,
           storedSoundOff,
           storedSoundOn,
+        },
+        readyAlert: {
+          deniedPermission,
+          deniedReadyAlert,
+          readyAfterClientReload,
+          readyAfterReady,
+          readyBeforeReady,
+          readyPermission,
         },
         mobileMetrics,
         desktopMetrics,
