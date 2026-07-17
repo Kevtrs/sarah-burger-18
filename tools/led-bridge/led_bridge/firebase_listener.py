@@ -99,7 +99,7 @@ class FirebaseOrdersWatcher:
             data_lines: list[str] = []
             last_activity = time.monotonic()
 
-            for raw_line in response.iter_lines(decode_unicode=True):
+            for raw_line in response.iter_lines(chunk_size=1, decode_unicode=True):
                 if stop_event.is_set():
                     return
                 if raw_line is None:
@@ -183,6 +183,9 @@ class FirebaseOrdersWatcher:
         initial: bool = False,
     ) -> None:
         try:
-            on_event(event_from_firebase(order_id, order, initial=initial))
+            event = event_from_firebase(order_id, order, initial=initial)
+            if not initial:
+                log(f"Firebase changement #{event.number} -> {event.log_label}")
+            on_event(event)
         except ValueError as exc:
             log(f"Commande ignoree ({order_id}): {exc}")

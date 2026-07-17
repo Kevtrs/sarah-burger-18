@@ -46,9 +46,9 @@ class WorkerDisplayTest(unittest.TestCase):
             config = SimpleNamespace(
                 generated_dir=Path(tmp),
                 panel=SimpleNamespace(
-                    idle_gif_path=None,
                     ready_display_seconds=0,
                     status_display_seconds=0,
+                    rotation_seconds=3,
                 ),
             )
 

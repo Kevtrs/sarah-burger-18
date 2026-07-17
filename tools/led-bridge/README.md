@@ -1,8 +1,8 @@
 # Sarah Burger LED Bridge
 
-Ce dossier contient le programme Windows qui affiche les commandes Sarah Burger sur le panneau LED Bluetooth 32x32.
+Ce dossier contient le programme Windows qui affiche les commandes Sarah Burger sur un mur LED Bluetooth 64x64 compose de quatre panneaux 32x32.
 
-Le bridge ne depend plus du navigateur. Il ecoute directement Firebase Realtime Database, puis envoie une image 32x32 au panneau avec `pypixelcolor`.
+Le bridge ne depend plus du navigateur. Il ecoute directement Firebase Realtime Database, dessine une image virtuelle 64x64, la decoupe en quatre images 32x32, puis envoie chaque morceau au bon panneau avec `pypixelcolor`.
 
 ## 1. A quoi ca sert
 
@@ -11,7 +11,7 @@ Pendant la soiree :
 1. les invites commandent sur Sarah Burger ;
 2. la cuisine change les statuts dans `/#stand` ;
 3. ce programme voit les changements dans Firebase ;
-4. le panneau LED affiche le numero de commande.
+4. le mur LED affiche le numero de commande.
 
 Affichage :
 
@@ -21,7 +21,7 @@ Affichage :
 - `served` : numero + `SERVI`
 - `cancelled` : numero + `ANNULE`
 
-La page web continue de fonctionner meme si le bridge est ferme, si Bluetooth coupe ou si le panneau n'est pas allume.
+La page web continue de fonctionner meme si le bridge est ferme, si Bluetooth coupe ou si un panneau n'est pas allume.
 
 ## 2. Telecharger la bonne branche
 
@@ -111,12 +111,19 @@ Verifier :
     "session_id": "sarah-18-2026"
   },
   "panel": {
-    "bluetooth_address": "6A:0B:5F:BC:79:7B",
     "ready_display_seconds": 20,
-    "status_display_seconds": 5,
+    "status_display_seconds": 3,
+    "rotation_seconds": 3,
     "reconnect_delay_seconds": 5,
-    "brightness": null,
-    "idle_gif_path": "assets/idle.gif"
+    "brightness": null
+  },
+  "wall": {
+    "panels": {
+      "top_left": "67:4D:FB:6D:7D:EE",
+      "top_right": "4C:E7:31:A8:23:DC",
+      "bottom_left": "2A:C0:17:D2:EB:9B",
+      "bottom_right": "6A:0B:5F:BC:79:7B"
+    }
   },
   "behavior": {
     "queue_existing_ready_on_start": false
@@ -126,23 +133,23 @@ Verifier :
 ```
 
 `ready_display_seconds` controle la duree d'affichage d'une commande prete.
+`rotation_seconds` controle la rotation quand plusieurs commandes actives sont affichees.
 
-## 7. GIF d'attente
+## 7. Disposition des panneaux
 
-Optionnel.
-
-Si tu veux une animation d'attente :
-
-1. creer ou recuperer un GIF deja en `32 x 32` pixels ;
-2. le placer ici :
+Le mur LED est utilise comme un seul ecran 64x64 :
 
 ```text
-tools/led-bridge/assets/idle.gif
++----------------+----------------+
+| top_left       | top_right      |
+| 67:4D:...      | 4C:E7:...      |
++----------------+----------------+
+| bottom_left    | bottom_right   |
+| 2A:C0:...      | 6A:0B:...      |
++----------------+----------------+
 ```
 
-Important : le bridge envoie les GIF sans reencodage. Si le GIF ne fait pas deja `32 x 32`, il est refuse pour eviter les animations bloquees ou partielles avec `pypixelcolor`.
-
-Sans GIF, le bridge affiche une image d'attente statique.
+Aucun GIF n'est utilise. Le firmware n'affiche pas correctement les animations GIF.
 
 ## 8. Tester le panneau
 
@@ -150,10 +157,10 @@ Fermer iPixel Color et toute autre application connectee au panneau.
 
 Verifier :
 
-- le panneau est charge ;
+- les quatre panneaux sont charges ;
 - le Bluetooth du PC est active ;
-- le panneau n'est pas connecte a un telephone ;
-- l'adresse Bluetooth est `6A:0B:5F:BC:79:7B`.
+- les panneaux ne sont pas connectes a un telephone ;
+- les quatre adresses Bluetooth sont bien dans `config.json`.
 
 Puis double-cliquer :
 
@@ -161,7 +168,7 @@ Puis double-cliquer :
 TESTER.bat
 ```
 
-Le panneau doit afficher :
+Le mur doit afficher :
 
 ```text
 #27 PRET
@@ -184,7 +191,7 @@ Logs attendus :
 ```text
 [14:32:01] Sarah Burger LED Bridge
 [14:32:01] Firebase connecte
-[14:32:04] Panneau connecte: 32x32
+[14:32:04] Haut gauche connecte: 32x32
 [14:33:12] Commande #27 -> PRETE
 [14:33:14] Image envoyee
 ```
@@ -216,6 +223,7 @@ Si plusieurs burgers deviennent prets en meme temps :
 - un doublon `ready -> ready` est ignore.
 
 Une commande `received` ou `preparing` reste affichee tant qu'aucun statut plus important n'arrive.
+S'il y a plusieurs commandes actives, elles tournent toutes les `rotation_seconds`.
 Apres une commande `ready`, `served` ou `cancelled`, le panneau revient a l'attente ou au prochain etat disponible.
 
 ## 12. Si le panneau ne se connecte pas
@@ -224,9 +232,9 @@ Verifier :
 
 1. Bluetooth Windows est active ;
 2. iPixel Color est ferme ;
-3. le panneau n'est pas connecte a un autre appareil ;
-4. l'adresse dans `config.json` est correcte ;
-5. le panneau est assez charge ;
+3. aucun panneau n'est connecte a un autre appareil ;
+4. les adresses dans `config.json` sont correctes ;
+5. les panneaux sont assez charges ;
 6. relancer `LANCER.bat`.
 
 Si besoin, supprimer l'appairage Bluetooth Windows du panneau, puis le reconnecter.
@@ -251,7 +259,7 @@ Verifier :
 2. la commande change bien de statut dans la cuisine ;
 3. `TESTER.bat` fonctionne ;
 4. le panneau n'est pas connecte a iPixel Color ;
-5. le GIF d'attente, s'il existe, fait bien `32 x 32`.
+5. les quatre panneaux sont allumes et proches du PC.
 
 ## 15. Arreter proprement
 
@@ -277,18 +285,17 @@ Avant la soiree, verifie quand meme que le bridge se lance bien et que le pannea
 ## Test complet avant la soiree
 
 ```text
-[ ] Le panneau est charge
+[ ] Les quatre panneaux sont charges
 [ ] Le Bluetooth du PC est active
 [ ] iPixel Color est completement ferme
-[ ] Le panneau n'est connecte a aucun telephone
+[ ] Aucun panneau n'est connecte a un telephone
 [ ] INSTALLER.bat a ete lance sans erreur
 [ ] service-account.json est present
-[ ] config.json contient la bonne adresse Bluetooth
-[ ] Le GIF d'attente est absent ou deja en 32 x 32
+[ ] config.json contient les quatre adresses Bluetooth
 [ ] TESTER.bat affiche #27 PRET
 [ ] LANCER.bat affiche Firebase connecte
 [ ] Une fausse commande passe de recue a prete
-[ ] Le numero apparait sur le panneau
+[ ] Le numero apparait sur le mur LED
 [ ] Le programme redemarre correctement
 [ ] La page #stand fonctionne meme si le bridge est ferme
 ```
@@ -307,6 +314,7 @@ Depuis `tools/led-bridge` :
 
 - Le bridge utilise `google-auth` + REST streaming Firebase, pas Firebase Admin SDK, pour eviter une dependance plus lourde.
 - Le navigateur n'appelle plus `127.0.0.1`, donc pas de probleme de mixed content ou de CORS.
-- Les PNG generes sont en `32 x 32`.
-- Les GIF sont envoyes sans reencodage avec l'API interne de `pypixelcolor 0.4.0`.
+- Les PNG principaux sont generes en `64 x 64`.
+- Le controleur `LedWallController` decoupe automatiquement en quatre images `32 x 32`.
+- Les GIF ne sont plus utilises.
 - Les secrets locaux sont ignores par Git : `config.json`, `service-account.json`, `.venv`.

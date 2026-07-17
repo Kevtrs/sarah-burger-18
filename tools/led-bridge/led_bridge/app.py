@@ -3,10 +3,12 @@ from __future__ import annotations
 import argparse
 import signal
 import threading
+import time
 from pathlib import Path
 
 from .config import load_config
 from .firebase_listener import FirebaseOrdersWatcher
+from .led_wall import LedWallController
 from .logging_utils import log
 from .models import STATUS_LOG_LABELS, validate_order_event
 from .panel import PixelPanel
@@ -27,19 +29,26 @@ def run_worker(config, queue: DisplayQueue, panel: PixelPanel, stop_event: threa
         log(f"Demarrage panneau impossible: {exc}")
 
     idle_sent = False
-    persistent_event = None
+    active_events = {}
+    active_index = 0
+    last_rotation = time.monotonic()
     while not stop_event.is_set():
         event = queue.next_event(timeout=2)
         if event is None:
-            if persistent_event is not None:
+            if active_events:
+                active_list = sorted(active_events.values(), key=lambda item: (item.status != "preparing", item.number))
+                if len(active_list) > 1 and time.monotonic() - last_rotation >= config.panel.rotation_seconds:
+                    active_index = (active_index + 1) % len(active_list)
+                    try:
+                        display_event(panel, config.generated_dir, active_list[active_index])
+                    except Exception as exc:
+                        log(f"Erreur rotation panneau: {exc}")
+                    last_rotation = time.monotonic()
                 continue
             if idle_sent:
                 continue
             try:
-                if config.panel.idle_gif_path and config.panel.idle_gif_path.exists():
-                    panel.send_image(config.panel.idle_gif_path)
-                else:
-                    panel.send_image(render_message("idle", config.generated_dir, detail="STAND"))
+                panel.send_image(render_message("idle", config.generated_dir, detail="STAND"))
                 idle_sent = True
             except Exception as exc:
                 log(f"Affichage attente impossible: {exc}")
@@ -49,9 +58,13 @@ def run_worker(config, queue: DisplayQueue, panel: PixelPanel, stop_event: threa
         try:
             display_event(panel, config.generated_dir, event)
             if event.status in {"received", "preparing"}:
-                persistent_event = event
-            elif persistent_event is not None and persistent_event.order_id == event.order_id:
-                persistent_event = None
+                active_events[event.order_id] = event
+                active_index = 0
+            else:
+                active_events.pop(event.order_id, None)
+                if active_events:
+                    active_index %= len(active_events)
+            last_rotation = time.monotonic()
         except Exception as exc:
             log(f"Erreur panneau: {exc}")
             try:
@@ -63,16 +76,30 @@ def run_worker(config, queue: DisplayQueue, panel: PixelPanel, stop_event: threa
         stop_event.wait(delay)
 
 
-def run(config_path: Path, *, dry_run: bool = False) -> None:
-    config = load_config(config_path)
-    stop_event = threading.Event()
-    queue = DisplayQueue(queue_existing_ready_on_start=config.queue_existing_ready_on_start)
-    panel = PixelPanel(
+def create_display_controller(config, *, dry_run: bool = False):
+    if config.panel.wall_panels:
+        log("Mode mur LED 64x64 actif")
+        return LedWallController(
+            config.panel.wall_panels,
+            config.generated_dir,
+            brightness=config.panel.brightness,
+            reconnect_delay_seconds=config.panel.reconnect_delay_seconds,
+            dry_run=dry_run,
+        )
+
+    return PixelPanel(
         config.panel.bluetooth_address,
         brightness=config.panel.brightness,
         reconnect_delay_seconds=config.panel.reconnect_delay_seconds,
         dry_run=dry_run,
     )
+
+
+def run(config_path: Path, *, dry_run: bool = False) -> None:
+    config = load_config(config_path)
+    stop_event = threading.Event()
+    queue = DisplayQueue(queue_existing_ready_on_start=config.queue_existing_ready_on_start)
+    panel = create_display_controller(config, dry_run=dry_run)
 
     def stop(_signum=None, _frame=None):
         stop_event.set()
@@ -87,7 +114,11 @@ def run(config_path: Path, *, dry_run: bool = False) -> None:
     watcher = FirebaseOrdersWatcher(config.firebase)
     log("Sarah Burger LED Bridge")
     log(f"Session Firebase: {config.firebase.session_id}")
-    log(f"Panneau: {config.panel.bluetooth_address}")
+    if config.panel.wall_panels:
+        for name, address in config.panel.wall_panels.items():
+            log(f"Panneau {name}: {address}")
+    else:
+        log(f"Panneau: {config.panel.bluetooth_address}")
     watcher.listen(lambda event: queue.enqueue(event), stop_event)
 
 
@@ -96,12 +127,7 @@ def run_test(config_path: Path, number: int, status: str, *, dry_run: bool = Fal
     event = validate_order_event(
         {"orderId": "test-local", "number": number, "guestName": "Test", "status": status}
     )
-    panel = PixelPanel(
-        config.panel.bluetooth_address,
-        brightness=config.panel.brightness,
-        reconnect_delay_seconds=config.panel.reconnect_delay_seconds,
-        dry_run=dry_run,
-    )
+    panel = create_display_controller(config, dry_run=dry_run)
     display_event(panel, config.generated_dir, event)
     panel.close()
 

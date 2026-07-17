@@ -8,10 +8,11 @@ from PIL import Image, ImageDraw
 
 from led_bridge.models import validate_order_event
 from led_bridge.renderer import choose_number_font, render_message, render_order, text_size
+from led_bridge.virtual_display import VirtualDisplay64
 
 
 class RendererTest(unittest.TestCase):
-    def test_numbers_fit_32_by_32(self):
+    def test_numbers_fit_64_by_64(self):
         with tempfile.TemporaryDirectory() as tmp:
             output_dir = Path(tmp)
             for number in (1, 9, 18, 27, 99, 100, 999):
@@ -20,22 +21,30 @@ class RendererTest(unittest.TestCase):
                 )
                 path = render_order(event, output_dir)
                 with Image.open(path) as image:
-                    self.assertEqual(image.size, (32, 32))
+                    self.assertEqual(image.size, (64, 64))
                     self.assertEqual(image.mode, "RGB")
                     self.assertIsNotNone(image.getbbox())
 
-                probe = Image.new("RGB", (32, 32))
+                probe = Image.new("RGB", (64, 64))
                 draw = ImageDraw.Draw(probe)
-                width, height = text_size(draw, str(number), choose_number_font(number))
-                self.assertLessEqual(width, 30)
-                self.assertLessEqual(height, 18)
+                width, height = text_size(draw, f"#{number}", choose_number_font(number))
+                self.assertLessEqual(width, 62)
+                self.assertLessEqual(height, 29)
 
     def test_message_render(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = render_message("idle", Path(tmp), detail="STAND")
             with Image.open(path) as image:
-                self.assertEqual(image.size, (32, 32))
+                self.assertEqual(image.size, (64, 64))
                 self.assertIsNotNone(image.getbbox())
+
+    def test_virtual_display_splits_into_four_panels(self):
+        display = VirtualDisplay64()
+        panels = display.split_to_panels()
+
+        self.assertEqual(set(panels), {"top_left", "top_right", "bottom_left", "bottom_right"})
+        for image in panels.values():
+            self.assertEqual(image.size, (32, 32))
 
 
 if __name__ == "__main__":

@@ -17,11 +17,13 @@ class PixelPanel:
         brightness: int | None = None,
         reconnect_delay_seconds: float = 5,
         dry_run: bool = False,
+        label: str = "panneau",
     ):
         self.address = address
         self.brightness = brightness
         self.reconnect_delay_seconds = reconnect_delay_seconds
         self.dry_run = dry_run
+        self.label = label
         self._client = None
         self._lock = threading.Lock()
 
@@ -32,7 +34,7 @@ class PixelPanel:
 
     def connect(self) -> None:
         if self.dry_run:
-            log(f"Mode test: connexion panneau simulee ({self.address})")
+            log(f"Mode test: connexion {self.label} simulee ({self.address})")
             return
         if self.connected:
             return
@@ -40,13 +42,13 @@ class PixelPanel:
         from pypixelcolor import Client
 
         self.close()
-        log(f"Connexion Bluetooth au panneau {self.address}...")
+        log(f"Connexion Bluetooth au {self.label} {self.address}...")
         self._client = Client(self.address)
         self._client.connect()
         if self.brightness is not None:
             self._client.set_brightness(self.brightness)
         info = self._client.get_device_info()
-        log(f"Panneau connecte: {info.width}x{info.height}")
+        log(f"{self.label.capitalize()} connecte: {info.width}x{info.height}")
 
     def close(self) -> None:
         if self._client is not None:
