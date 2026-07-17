@@ -195,6 +195,13 @@ export function GuestOrder({ store }) {
 
   function goBack() {
     setError("");
+
+    if (step === "customize" && isExtraBurger) {
+      withViewTransition(() => flushSync(() => setStep("review")), "customize-to-review");
+      window.scrollTo({ top: 0, behavior: "auto" });
+      return;
+    }
+
     const index = steps.indexOf(step);
     if (index > 0) {
       const previousStep = steps[index - 1];
