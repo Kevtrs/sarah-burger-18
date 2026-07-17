@@ -10,10 +10,12 @@ from .config import load_config
 from .firebase_listener import FirebaseOrdersWatcher
 from .led_wall import LedWallController
 from .logging_utils import log
-from .models import STATUS_LOG_LABELS, validate_order_event
+from .models import OrderEvent, STATUS_LOG_LABELS, validate_order_event
 from .panel import PixelPanel
 from .queueing import DisplayQueue
-from .renderer import ACTIVE_STATUSES, render_message, render_order, render_order_grid
+from .renderer import ACTIVE_STATUSES, RUSH_THRESHOLD, render_message, render_order, render_order_grid, render_rush_summary
+
+HEALTH_LOG_SECONDS = 30
 
 
 def display_event(panel: PixelPanel, generated_dir: Path, event) -> None:
@@ -22,11 +24,67 @@ def display_event(panel: PixelPanel, generated_dir: Path, event) -> None:
     panel.send_image(image_path)
 
 
-def display_active_events(panel: PixelPanel, generated_dir: Path, events: dict[str, object], *, page: int = 0) -> None:
-    active_list = list(events.values())
+def _active_list(events: dict[str, OrderEvent]) -> list[OrderEvent]:
+    return sorted(events.values(), key=lambda event: (event.status != "ready", event.number))
+
+
+def _ready_list(events: dict[str, OrderEvent]) -> list[OrderEvent]:
+    return sorted([event for event in events.values() if event.status == "ready"], key=lambda event: event.number)
+
+
+def _counts(events: dict[str, OrderEvent]) -> tuple[int, int, int]:
+    values = list(events.values())
+    ready = sum(1 for event in values if event.status == "ready")
+    preparing = sum(1 for event in values if event.status == "preparing")
+    received = sum(1 for event in values if event.status == "received")
+    return ready, preparing, received
+
+
+def _send_ready_focus(
+    panel: PixelPanel,
+    generated_dir: Path,
+    event: OrderEvent,
+    *,
+    index: int | None = None,
+    total: int | None = None,
+) -> None:
+    suffix = f" ({index}/{total})" if index is not None and total else ""
+    name = f" {event.guest_name}" if event.guest_name else ""
+    log(f"A recuperer{suffix}: #{event.number}{name}")
+    panel.send_image(render_order(event, generated_dir))
+
+
+def display_active_events(panel: PixelPanel, generated_dir: Path, events: dict[str, OrderEvent], *, page: int = 0) -> None:
+    active_list = _active_list(events)
     if not active_list:
         panel.send_image(render_message("idle", generated_dir, detail="SARAH"))
         return
+
+    ready_list = _ready_list(events)
+    if len(active_list) >= RUSH_THRESHOLD:
+        if ready_list:
+            cycle_len = len(ready_list) + 1
+            slot = page % cycle_len
+            if slot < len(ready_list):
+                _send_ready_focus(panel, generated_dir, ready_list[slot], index=slot + 1, total=len(ready_list))
+                return
+
+        ready_count, preparing_count, received_count = _counts(events)
+        image_path = render_rush_summary(active_list, generated_dir)
+        log(
+            "Mode rush: "
+            f"{len(active_list)} actives | PRET {ready_count} | PREPA {preparing_count} | RECU {received_count}"
+        )
+        panel.send_image(image_path)
+        return
+
+    if ready_list:
+        overview_needed = len(active_list) > len(ready_list)
+        cycle_len = len(ready_list) + (1 if overview_needed else 0)
+        slot = page % cycle_len
+        if slot < len(ready_list):
+            _send_ready_focus(panel, generated_dir, ready_list[slot], index=slot + 1, total=len(ready_list))
+            return
 
     if len(active_list) == 1:
         display_event(panel, generated_dir, active_list[0])
@@ -35,6 +93,39 @@ def display_active_events(panel: PixelPanel, generated_dir: Path, events: dict[s
     image_path = render_order_grid(active_list, generated_dir, page=page)
     log(f"Affichage grille commandes actives ({len(active_list)})")
     panel.send_image(image_path)
+
+
+def _panel_health(panel: PixelPanel) -> str:
+    wall_panels = getattr(panel, "panels", None)
+    if isinstance(wall_panels, dict) and wall_panels:
+        total = len(wall_panels)
+        connected = sum(1 for item in wall_panels.values() if getattr(item, "dry_run", False) or item.connected)
+        return f"panneaux {connected}/{total} OK"
+
+    if getattr(panel, "dry_run", False) or getattr(panel, "connected", False):
+        return "panneau 1/1 OK"
+    return "panneau 0/1 OK"
+
+
+def log_health(panel: PixelPanel, active_events: dict[str, OrderEvent], last_event: OrderEvent | None, last_event_at: float | None) -> None:
+    ready_count, preparing_count, received_count = _counts(active_events)
+    if last_event and last_event_at is not None:
+        age = max(0, int(time.monotonic() - last_event_at))
+        last = f"dernier #{last_event.number} {last_event.led_label} il y a {age}s"
+    else:
+        last = "aucun changement recu"
+
+    log(
+        "Sante: Firebase OK | "
+        f"{_panel_health(panel)} | actifs {len(active_events)} "
+        f"(PRET {ready_count}, PREPA {preparing_count}, RECU {received_count}) | {last}"
+    )
+
+
+def should_rotate_active_display(active_events: dict[str, OrderEvent]) -> bool:
+    if len(active_events) >= RUSH_THRESHOLD:
+        return True
+    return bool(_ready_list(active_events)) and len(active_events) > 1
 
 
 def wait_for_next_event(queue: DisplayQueue, stop_event: threading.Event, delay: float):
@@ -64,15 +155,21 @@ def run_worker(config, queue: DisplayQueue, panel: PixelPanel, stop_event: threa
     active_events = {}
     active_page = 0
     last_rotation = time.monotonic()
+    last_health = 0.0
+    last_event = None
+    last_event_at = None
     pending_event = None
     while not stop_event.is_set():
         event = pending_event or queue.next_event(timeout=2)
         pending_event = None
         if event is None:
+            if time.monotonic() - last_health >= HEALTH_LOG_SECONDS:
+                log_health(panel, active_events, last_event, last_event_at)
+                last_health = time.monotonic()
+
             if active_events:
-                if len(active_events) > 4 and time.monotonic() - last_rotation >= config.panel.rotation_seconds:
-                    page_count = (len(active_events) + 3) // 4
-                    active_page = (active_page + 1) % page_count
+                if should_rotate_active_display(active_events) and time.monotonic() - last_rotation >= config.panel.rotation_seconds:
+                    active_page += 1
                     try:
                         display_active_events(panel, config.generated_dir, active_events, page=active_page)
                     except Exception as exc:
@@ -89,11 +186,16 @@ def run_worker(config, queue: DisplayQueue, panel: PixelPanel, stop_event: threa
             continue
 
         idle_sent = False
+        last_event = event
+        last_event_at = time.monotonic()
         try:
             if event.status in ACTIVE_STATUSES:
                 active_events[event.order_id] = event
                 active_page = 0
-                display_active_events(panel, config.generated_dir, active_events, page=active_page)
+                if event.status == "ready":
+                    _send_ready_focus(panel, config.generated_dir, event)
+                else:
+                    display_active_events(panel, config.generated_dir, active_events, page=active_page)
             else:
                 active_events.pop(event.order_id, None)
                 display_event(panel, config.generated_dir, event)
@@ -107,9 +209,12 @@ def run_worker(config, queue: DisplayQueue, panel: PixelPanel, stop_event: threa
 
         delay = config.panel.ready_display_seconds if event.status == "ready" else config.panel.status_display_seconds
         pending_event = wait_for_next_event(queue, stop_event, delay)
-        if pending_event is None and event.status not in ACTIVE_STATUSES and active_events and not stop_event.is_set():
+        if pending_event is None and active_events and not stop_event.is_set():
             try:
+                if event.status == "ready" or event.status not in ACTIVE_STATUSES:
+                    active_page += 1
                 display_active_events(panel, config.generated_dir, active_events, page=active_page)
+                last_rotation = time.monotonic()
             except Exception as exc:
                 log(f"Erreur retour commandes actives: {exc}")
 

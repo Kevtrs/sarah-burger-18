@@ -7,7 +7,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from led_bridge.models import STATUS_LABELS, validate_order_event
-from led_bridge.renderer import choose_number_font, render_message, render_order, render_order_grid, text_size
+from led_bridge.renderer import choose_number_font, render_message, render_order, render_order_grid, render_rush_summary, text_size
 from led_bridge.virtual_display import VirtualDisplay64
 
 
@@ -69,6 +69,20 @@ class RendererTest(unittest.TestCase):
                 self.assertEqual(image.size, (64, 64))
                 self.assertIsNotNone(image.crop((0, 0, 32, 32)).getbbox())
                 self.assertIsNotNone(image.crop((32, 0, 64, 32)).getbbox())
+
+    def test_rush_summary_render(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            events = [
+                validate_order_event({"orderId": "order-39", "number": 39, "guestName": "Kevin", "status": "ready"}),
+                validate_order_event({"orderId": "order-40", "number": 40, "guestName": "Sarah", "status": "preparing"}),
+                validate_order_event({"orderId": "order-41", "number": 41, "guestName": "Mila", "status": "received"}),
+                validate_order_event({"orderId": "order-42", "number": 42, "guestName": "Tom", "status": "received"}),
+                validate_order_event({"orderId": "order-43", "number": 43, "guestName": "Nina", "status": "preparing"}),
+            ]
+            path = render_rush_summary(events, Path(tmp))
+            with Image.open(path) as image:
+                self.assertEqual(image.size, (64, 64))
+                self.assertIsNotNone(image.getbbox())
 
     def test_message_render(self):
         with tempfile.TemporaryDirectory() as tmp:

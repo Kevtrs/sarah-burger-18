@@ -113,6 +113,55 @@ class WorkerDisplayTest(unittest.TestCase):
         sent_names = [path.name for path in panel.sent]
         self.assertIn("active-orders-page-1.png", sent_names)
 
+    def test_ready_order_gets_fullscreen_priority(self):
+        stop_event = threading.Event()
+        panel = FakePanel()
+        queue = ScriptedQueue(
+            stop_event,
+            [
+                event("order-39", 39, "received"),
+                event("order-40", 40, "ready"),
+            ],
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = SimpleNamespace(
+                generated_dir=Path(tmp),
+                panel=SimpleNamespace(
+                    ready_display_seconds=1,
+                    status_display_seconds=1,
+                    rotation_seconds=3,
+                ),
+            )
+
+            run_worker(config, queue, panel, stop_event)
+
+        sent_names = [path.name for path in panel.sent]
+        self.assertIn("order-order-40-ready.png", sent_names)
+
+    def test_five_active_orders_use_rush_summary(self):
+        stop_event = threading.Event()
+        panel = FakePanel()
+        queue = ScriptedQueue(
+            stop_event,
+            [event(f"order-{number}", number, "received") for number in range(39, 44)],
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = SimpleNamespace(
+                generated_dir=Path(tmp),
+                panel=SimpleNamespace(
+                    ready_display_seconds=0,
+                    status_display_seconds=0,
+                    rotation_seconds=3,
+                ),
+            )
+
+            run_worker(config, queue, panel, stop_event)
+
+        sent_names = [path.name for path in panel.sent]
+        self.assertIn("rush-summary.png", sent_names)
+
 
 if __name__ == "__main__":
     unittest.main()

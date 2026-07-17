@@ -18,7 +18,10 @@ Affichage :
 - le prenom est affiche en grand au centre ;
 - le numero est affiche en petit en bas ;
 - le statut est affiche dans un bandeau en haut : `RECU`, `PREPA`, `PRET`, `SERVI` ou `ANNULE`.
+- une commande `PRET` passe en priorite plein ecran pour que l'invite voie son prenom.
+- s'il y a plusieurs commandes pretes, le mur fait tourner les prenoms a recuperer.
 - s'il y a plusieurs commandes actives, le mur passe en grille 2x2.
+- a partir de 5 commandes actives, le mur passe en mode `RUSH` avec les compteurs `PRET`, `PREPA` et `RECU`.
 - s'il n'y a aucune commande active, le mur affiche un ecran d'attente simple `SARAH BURGER`.
 
 La page web continue de fonctionner meme si le bridge est ferme, si Bluetooth coupe ou si un panneau n'est pas allume.
@@ -217,17 +220,32 @@ Quand une commande passe a `ready`, elle est placee dans une file.
 
 Si plusieurs burgers deviennent prets en meme temps :
 
-- chaque numero est affiche ;
+- chaque prenom pret est affiche en plein ecran ;
 - l'ordre d'arrivee est conserve ;
 - une commande prete n'est pas perdue ;
 - un doublon `ready -> ready` est ignore.
 
 Une commande `received` ou `preparing` reste affichee tant qu'aucun statut plus important n'arrive.
 S'il y a plusieurs commandes actives, elles sont affichees ensemble en grille 2x2.
-S'il y a plus de quatre commandes actives, le mur fait defiler les pages toutes les `rotation_seconds`.
+S'il y a plus de quatre commandes actives, le mur affiche un resume `RUSH` avec le nombre de commandes `PRET`, `PREPA` et `RECU`.
 Apres une commande `ready`, `served` ou `cancelled`, le panneau revient a l'attente ou au prochain etat disponible.
 
-## 12. Si le panneau ne se connecte pas
+## 12. Logs sante
+
+Toutes les 30 secondes, la fenetre du bridge affiche un etat court :
+
+```text
+Sante: Firebase OK | panneaux 4/4 OK | actifs 5 (PRET 1, PREPA 2, RECU 2) | dernier #39 PRET il y a 12s
+```
+
+Ca permet de verifier rapidement :
+
+- si Firebase repond ;
+- si les quatre panneaux sont connectes ;
+- combien de commandes sont encore actives ;
+- quel est le dernier changement recu.
+
+## 13. Si le panneau ne se connecte pas
 
 Verifier :
 
@@ -240,7 +258,7 @@ Verifier :
 
 Si besoin, supprimer l'appairage Bluetooth Windows du panneau, puis le reconnecter.
 
-## 13. Si Firebase ne repond pas
+## 14. Si Firebase ne repond pas
 
 Verifier :
 
@@ -252,7 +270,7 @@ Verifier :
 
 Ne mets pas les regles Firebase en mode test.
 
-## 14. Si l'image ne change pas
+## 15. Si l'image ne change pas
 
 Verifier :
 
@@ -262,7 +280,7 @@ Verifier :
 4. le panneau n'est pas connecte a iPixel Color ;
 5. les quatre panneaux sont allumes et proches du PC.
 
-## 15. Arreter proprement
+## 16. Arreter proprement
 
 Dans la fenetre du bridge :
 
@@ -272,7 +290,7 @@ Ctrl + C
 
 Puis attendre la fermeture. Tu peux aussi fermer la fenetre si necessaire.
 
-## 16. Lancement automatique Windows
+## 17. Lancement automatique Windows
 
 Option simple :
 

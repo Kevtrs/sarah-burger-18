@@ -10,6 +10,7 @@ from .virtual_display import BLACK, HEIGHT, WHITE, WIDTH, VirtualDisplay64, font
 
 ACTIVE_STATUSES = {"received", "preparing", "ready"}
 ACTIVE_SORT = {"ready": 0, "preparing": 1, "received": 2}
+RUSH_THRESHOLD = 5
 
 
 def _safe_filename(value: str) -> str:
@@ -182,6 +183,41 @@ def render_order_grid(events: list[OrderEvent], output_dir: Path, *, page: int =
         display.draw.text((55, 55), label, font=font(6, bold=True), fill=(255, 176, 42), anchor="ma")
 
     path = output_dir / f"active-orders-page-{page + 1}.png"
+    display.save(path)
+    return path
+
+
+def _count_status(events: list[OrderEvent], status: str) -> int:
+    return sum(1 for event in events if event.status == status)
+
+
+def render_rush_summary(events: list[OrderEvent], output_dir: Path) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    active_events = [event for event in events if event.status in ACTIVE_STATUSES]
+    ready_count = _count_status(active_events, "ready")
+    preparing_count = _count_status(active_events, "preparing")
+    received_count = _count_status(active_events, "received")
+
+    display = VirtualDisplay64()
+    pink = (232, 20, 82)
+    orange = STATUS_COLORS["preparing"]
+    green = STATUS_COLORS["ready"]
+    yellow = STATUS_COLORS["received"]
+
+    display.draw.rectangle((0, 0, 63, 63), outline=pink, width=2)
+    display.draw.text((WIDTH // 2, 3), "RUSH", font=font(14, bold=True), fill=WHITE, anchor="ma")
+    display.draw.line((5, 20, 58, 20), fill=pink)
+
+    rows = [
+        ("PRET", ready_count, green, 25),
+        ("PREPA", preparing_count, orange, 38),
+        ("RECU", received_count, yellow, 51),
+    ]
+    for label, count, color, y in rows:
+        display.draw.text((5, y), label, font=font(8, bold=True), fill=color, anchor="la")
+        display.draw.text((58, y - 1), str(count), font=font(11, bold=True), fill=WHITE, anchor="ra")
+
+    path = output_dir / "rush-summary.png"
     display.save(path)
     return path
 
