@@ -215,7 +215,8 @@ Si plusieurs burgers deviennent prets en meme temps :
 - une commande prete n'est pas perdue ;
 - un doublon `ready -> ready` est ignore.
 
-Apres la file, le panneau revient a l'attente ou au prochain etat disponible.
+Une commande `received` ou `preparing` reste affichee tant qu'aucun statut plus important n'arrive.
+Apres une commande `ready`, `served` ou `cancelled`, le panneau revient a l'attente ou au prochain etat disponible.
 
 ## 12. Si le panneau ne se connecte pas
 

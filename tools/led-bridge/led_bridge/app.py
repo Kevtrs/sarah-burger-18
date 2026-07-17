@@ -27,9 +27,12 @@ def run_worker(config, queue: DisplayQueue, panel: PixelPanel, stop_event: threa
         log(f"Demarrage panneau impossible: {exc}")
 
     idle_sent = False
+    persistent_event = None
     while not stop_event.is_set():
         event = queue.next_event(timeout=2)
         if event is None:
+            if persistent_event is not None:
+                continue
             if idle_sent:
                 continue
             try:
@@ -45,6 +48,10 @@ def run_worker(config, queue: DisplayQueue, panel: PixelPanel, stop_event: threa
         idle_sent = False
         try:
             display_event(panel, config.generated_dir, event)
+            if event.status in {"received", "preparing"}:
+                persistent_event = event
+            elif persistent_event is not None and persistent_event.order_id == event.order_id:
+                persistent_event = None
         except Exception as exc:
             log(f"Erreur panneau: {exc}")
             try:
