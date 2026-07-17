@@ -112,7 +112,7 @@
             "$subscriptionId": {
               ".read": "auth != null && data.exists() && data.child('ownerUid').val() == auth.uid",
               ".write": "auth != null && root.child('sessions').child($sessionId).child('orders').child($orderId).child('guestUid').val() == auth.uid && newData.exists() && newData.child('ownerUid').val() == auth.uid && newData.child('orderId').val() == $orderId && (!data.exists() || (data.child('ownerUid').val() == auth.uid && newData.child('ownerUid').val() == data.child('ownerUid').val() && newData.child('orderId').val() == data.child('orderId').val() && newData.child('createdAtMs').val() == data.child('createdAtMs').val()))",
-              ".validate": "newData.hasChildren(['token', 'orderId', 'orderNumber', 'ownerUid', 'createdAtMs', 'updatedAtMs', 'platform', 'enabled']) && newData.numChildren() <= 14",
+              ".validate": "newData.hasChildren(['token', 'orderId', 'orderNumber', 'ownerUid', 'createdAtMs', 'updatedAtMs', 'platform', 'enabled'])",
               "token": {
                 ".validate": "newData.isString() && newData.val().length >= 20 && newData.val().length <= 4096"
               },
