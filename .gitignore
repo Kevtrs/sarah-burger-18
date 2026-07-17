@@ -1,0 +1,14 @@
+.env
+.venv/
+node_modules/
+dist/
+
+tools/led-bridge/.venv/
+tools/led-bridge/config.json
+tools/led-bridge/service-account.json
+tools/led-bridge/current-display.png
+tools/led-bridge/generated/
+tools/led-bridge/logs/
+tools/led-bridge/assets/idle.gif
+tools/led-bridge/__pycache__/
+tools/led-bridge/**/__pycache__/

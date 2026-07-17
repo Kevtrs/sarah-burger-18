@@ -1,0 +1,32 @@
+{
+  "stand_open": true,
+  "high_contrast": false,
+  "firebase": {
+    "database_url": "https://sarah-burger-18-default-rtdb.europe-west1.firebasedatabase.app",
+    "service_account_path": "service-account.json",
+    "session_id": "sarah-18-2026"
+  },
+  "panel": {
+    "ready_display_seconds": 20,
+    "status_display_seconds": 3,
+    "terminal_display_seconds": 1,
+    "last_call_seconds": 180,
+    "rotation_seconds": 3,
+    "reconnect_delay_seconds": 5,
+    "brightness": null
+  },
+  "wall": {
+    "panels": {
+      "top_left": "67:4D:FB:6D:7D:EE",
+      "top_right": "4C:E7:31:A8:23:DC",
+      "bottom_left": "2A:C0:17:D2:EB:9B",
+      "bottom_right": "6A:0B:5F:BC:79:7B"
+    }
+  },
+  "behavior": {
+    "queue_existing_ready_on_start": false,
+    "stuck_order_minutes": 15,
+    "stuck_repeat_minutes": 5
+  },
+  "generated_dir": "generated"
+}
