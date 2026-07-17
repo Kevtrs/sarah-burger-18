@@ -15,11 +15,9 @@ Pendant la soiree :
 
 Affichage :
 
-- `received` : numero + `RECU`
-- `preparing` : numero + `CUIT`
-- `ready` : numero + `PRET`
-- `served` : numero + `SERVI`
-- `cancelled` : numero + `ANNULE`
+- le prenom est affiche en grand au centre ;
+- le numero est affiche en petit en bas ;
+- le statut est affiche dans un bandeau en haut : `RECU`, `CUIT`, `PRET`, `SERVI` ou `ANNULE`.
 
 La page web continue de fonctionner meme si le bridge est ferme, si Bluetooth coupe ou si un panneau n'est pas allume.
 

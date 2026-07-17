@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import unicodedata
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -22,12 +23,12 @@ def choose_number_font(number: int) -> ImageFont.ImageFont:
     text = f"#{number}"
     image = Image.new("RGB", (WIDTH, HEIGHT), BLACK)
     draw = ImageDraw.Draw(image)
-    for size in range(31, 11, -1):
+    for size in range(12, 7, -1):
         selected_font = font(size, bold=True)
         width, height = text_size(draw, text, selected_font)
-        if width <= 62 and height <= 29:
+        if width <= 30 and height <= 12:
             return selected_font
-    return font(12, bold=True)
+    return font(8, bold=True)
 
 
 def _draw_centered(
@@ -40,6 +41,51 @@ def _draw_centered(
     display.draw.text((WIDTH // 2, y), text, font=selected_font, fill=fill, anchor="ma")
 
 
+def _clean_display_name(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value or "")
+    ascii_name = normalized.encode("ascii", "ignore").decode("ascii")
+    cleaned = "".join(char for char in ascii_name.upper() if char.isalnum() or char in " -_")
+    cleaned = " ".join(cleaned.replace("_", " ").split())
+    return cleaned or "COMMANDE"
+
+
+def _fits(text: str, size: int, *, max_width: int, max_height: int) -> bool:
+    image = Image.new("RGB", (WIDTH, HEIGHT), BLACK)
+    draw = ImageDraw.Draw(image)
+    width, height = text_size(draw, text, font(size, bold=True))
+    return width <= max_width and height <= max_height
+
+
+def _fit_font(text: str, *, max_size: int, min_size: int, max_width: int, max_height: int) -> ImageFont.ImageFont:
+    for size in range(max_size, min_size - 1, -1):
+        if _fits(text, size, max_width=max_width, max_height=max_height):
+            return font(size, bold=True)
+    return font(min_size, bold=True)
+
+
+def _name_lines(value: str) -> list[str]:
+    cleaned = _clean_display_name(value)
+    if _fits(cleaned, 24, max_width=60, max_height=27):
+        return [cleaned]
+
+    words = cleaned.replace("-", " ").split()
+    if len(words) >= 2:
+        return [" ".join(words[:-1])[:12], words[-1][:12]]
+    return [cleaned[:12]]
+
+
+def _draw_guest_name(display: VirtualDisplay64, guest_name: str) -> None:
+    lines = _name_lines(guest_name)
+    if len(lines) == 1:
+        name_font = _fit_font(lines[0], max_size=24, min_size=10, max_width=60, max_height=27)
+        display.draw.text((WIDTH // 2, 32), lines[0], font=name_font, fill=WHITE, anchor="mm")
+        return
+
+    line_font = _fit_font(max(lines, key=len), max_size=15, min_size=9, max_width=60, max_height=14)
+    display.draw.text((WIDTH // 2, 25), lines[0], font=line_font, fill=WHITE, anchor="mm")
+    display.draw.text((WIDTH // 2, 39), lines[1], font=line_font, fill=WHITE, anchor="mm")
+
+
 def render_order(event: OrderEvent, output_dir: Path) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     display = VirtualDisplay64()
@@ -47,27 +93,14 @@ def render_order(event: OrderEvent, output_dir: Path) -> Path:
     dim = tuple(max(0, channel // 3) for channel in color)
 
     display.draw.rectangle((0, 0, 63, 63), outline=color, width=2)
-    display.draw.line((4, 35, 60, 35), fill=dim, width=1)
+    display.draw.rectangle((2, 2, 61, 14), fill=dim, outline=color)
+    _draw_centered(display, event.led_label, 3, _fit_font(event.led_label, max_size=11, min_size=8, max_width=56, max_height=10), color)
 
+    _draw_guest_name(display, event.guest_name)
+
+    number_text = f"#{event.number}"
     number_font = choose_number_font(event.number)
-    label_font = font(15 if event.status == "ready" else 13, bold=True)
-
-    _draw_centered(display, f"#{event.number}", 5, number_font, WHITE)
-    if event.status == "ready":
-        display.draw_icon("ready", x=5, y=42, fill=color)
-        _draw_centered(display, "PRET", 40, label_font, color)
-    elif event.status == "preparing":
-        display.draw_icon("preparing", x=3, y=40, fill=color)
-        _draw_centered(display, event.led_label, 41, label_font, color)
-    elif event.status == "cancelled":
-        display.draw_icon("cancelled", x=6, y=43, fill=color)
-        _draw_centered(display, event.led_label, 41, font(11, bold=True), color)
-    elif event.status == "served":
-        display.draw_icon("served", x=6, y=42, fill=color)
-        _draw_centered(display, event.led_label, 41, font(12, bold=True), color)
-    else:
-        display.draw_icon("received", x=7, y=43, fill=color)
-        _draw_centered(display, event.led_label, 41, label_font, color)
+    _draw_centered(display, number_text, 50, number_font, (210, 210, 210))
 
     path = output_dir / f"order-{_safe_filename(event.order_id)}-{event.status}.png"
     display.save(path)
