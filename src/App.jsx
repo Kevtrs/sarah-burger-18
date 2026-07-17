@@ -17,20 +17,20 @@ export default function App() {
   const [route, setRouteState] = useState(routeFromHash);
   const store = useMemo(() => {
     const baseStore = createOrderStore();
+    let orderCache = [];
+
     return {
       ...baseStore,
+      subscribeOrders(onChange, onError) {
+        return baseStore.subscribeOrders((orders) => {
+          orderCache = orders;
+          onChange(orders);
+        }, onError);
+      },
       async updateStatus(orderId, status) {
-        let matchedOrder = null;
-        const unsubscribe = baseStore.subscribeOrders?.((orders) => {
-          matchedOrder = orders.find((order) => order.id === orderId) || matchedOrder;
-        });
-
-        try {
-          await baseStore.updateStatus(orderId, status);
-          if (matchedOrder) void notifyLedBridge(matchedOrder, status);
-        } finally {
-          unsubscribe?.();
-        }
+        const matchedOrder = orderCache.find((order) => order.id === orderId);
+        await baseStore.updateStatus(orderId, status);
+        if (matchedOrder) void notifyLedBridge(matchedOrder, status);
       },
     };
   }, []);
