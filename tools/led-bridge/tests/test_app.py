@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -58,6 +59,33 @@ class WorkerDisplayTest(unittest.TestCase):
         self.assertIn("startup.png", sent_names)
         self.assertIn("order-order-39-received.png", sent_names)
         self.assertNotIn("idle.png", sent_names)
+
+    def test_status_delay_is_interrupted_by_next_event(self):
+        stop_event = threading.Event()
+        panel = FakePanel()
+        queue = ScriptedQueue(
+            stop_event,
+            [event("order-39", 39, "received"), event("order-39", 39, "preparing")],
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = SimpleNamespace(
+                generated_dir=Path(tmp),
+                panel=SimpleNamespace(
+                    ready_display_seconds=1,
+                    status_display_seconds=1,
+                    rotation_seconds=3,
+                ),
+            )
+
+            started_at = time.monotonic()
+            run_worker(config, queue, panel, stop_event)
+            elapsed = time.monotonic() - started_at
+
+        sent_names = [path.name for path in panel.sent]
+        self.assertIn("order-order-39-received.png", sent_names)
+        self.assertIn("order-order-39-preparing.png", sent_names)
+        self.assertLess(elapsed, 0.8)
 
 
 if __name__ == "__main__":

@@ -22,6 +22,23 @@ def display_event(panel: PixelPanel, generated_dir: Path, event) -> None:
     panel.send_image(image_path)
 
 
+def wait_for_next_event(queue: DisplayQueue, stop_event: threading.Event, delay: float):
+    if delay <= 0:
+        return None
+
+    deadline = time.monotonic() + delay
+    while not stop_event.is_set():
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return None
+
+        event = queue.next_event(timeout=min(0.25, remaining))
+        if event is not None:
+            return event
+
+    return None
+
+
 def run_worker(config, queue: DisplayQueue, panel: PixelPanel, stop_event: threading.Event) -> None:
     try:
         panel.send_image(render_message("startup", config.generated_dir, detail="START"))
@@ -32,8 +49,10 @@ def run_worker(config, queue: DisplayQueue, panel: PixelPanel, stop_event: threa
     active_events = {}
     active_index = 0
     last_rotation = time.monotonic()
+    pending_event = None
     while not stop_event.is_set():
-        event = queue.next_event(timeout=2)
+        event = pending_event or queue.next_event(timeout=2)
+        pending_event = None
         if event is None:
             if active_events:
                 active_list = sorted(active_events.values(), key=lambda item: (item.status != "preparing", item.number))
@@ -73,7 +92,7 @@ def run_worker(config, queue: DisplayQueue, panel: PixelPanel, stop_event: threa
                 pass
 
         delay = config.panel.ready_display_seconds if event.status == "ready" else config.panel.status_display_seconds
-        stop_event.wait(delay)
+        pending_event = wait_for_next_event(queue, stop_event, delay)
 
 
 def create_display_controller(config, *, dry_run: bool = False):
