@@ -26,7 +26,9 @@ class DisplayQueue:
             self._last_status_by_order[event.order_id] = event.status
 
             if event.initial and previous_status is None:
-                if event.status != "ready" or not self._queue_existing_ready_on_start:
+                if event.status in {"served", "cancelled"}:
+                    return False
+                if event.status == "ready" and not self._queue_existing_ready_on_start:
                     return False
 
             if event.status == "ready":

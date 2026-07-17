@@ -203,8 +203,8 @@ Le bridge ecoute Firebase directement. Il detecte donc aussi les changements fai
 
 ## 11. File des commandes pretes
 
-Au demarrage, le bridge lit Firebase pour connaitre l'etat actuel, mais il ne rejoue pas les anciennes commandes deja presentes.
-Il affiche seulement les changements detectes apres son lancement.
+Au demarrage, le bridge lit Firebase pour connaitre l'etat actuel.
+Il ignore les anciennes commandes servies ou annulees, puis affiche seulement les commandes encore actives.
 
 Quand une commande passe a `ready`, elle est placee dans une file.
 
