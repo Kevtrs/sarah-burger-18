@@ -12,14 +12,14 @@ import { flushSync } from "react-dom";
 import {
   assetPath,
   baseBurger,
-  getSauceLabel,
+  getSauceLabels,
   getToppingLabels,
+  noSauceOption,
   sauces,
   statuses,
   toppings,
 } from "../data/menu";
 import { useReadyOrderAlert } from "../hooks/useReadyOrderAlert";
-import { PushNotificationPrompt } from "./PushNotificationPrompt";
 
 const steps = ["identity", "customize", "review", "done"];
 const progressLabels = ["Prénom", "Burger", "Validation"];
@@ -66,7 +66,7 @@ export function GuestOrder({ store }) {
   const [step, setStep] = useState("identity");
   const [guestName, setGuestName] = useState("");
   const [selectedToppings, setSelectedToppings] = useState([]);
-  const [selectedSauce, setSelectedSauce] = useState("");
+  const [selectedSauces, setSelectedSauces] = useState([]);
   const [order, setOrder] = useState(null);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -87,7 +87,7 @@ export function GuestOrder({ store }) {
     () => getToppingLabels(selectedToppings),
     [selectedToppings],
   );
-  const selectedSauceLabel = useMemo(() => getSauceLabel(selectedSauce), [selectedSauce]);
+  const selectedSauceLabels = useMemo(() => getSauceLabels(selectedSauces), [selectedSauces]);
 
   useEffect(() => {
     const tracked = readyAlert.trackedOrder;
@@ -161,16 +161,26 @@ export function GuestOrder({ store }) {
     );
   }
 
+  function toggleSauce(id) {
+    setSelectedSauces((current) => {
+      if (id === noSauceOption.id) return [noSauceOption.id];
+      const withoutNone = current.filter((item) => item !== noSauceOption.id);
+      return withoutNone.includes(id)
+        ? withoutNone.filter((item) => item !== id)
+        : [...withoutNone, id];
+    });
+  }
+
   function canGoNext() {
     if (step === "identity") return guestName.trim().length > 0;
-    if (step === "customize") return Boolean(selectedSauce);
+    if (step === "customize") return selectedSauces.length > 0;
     return true;
   }
 
   function goNext() {
     setError("");
     if (!canGoNext()) {
-      setError(step === "identity" ? "Ajoute ton prénom avant de continuer." : "Choisis une sauce.");
+      setError(step === "identity" ? "Ajoute ton prénom avant de continuer." : "Choisis une sauce ou Sans sauce.");
       return;
     }
     const index = steps.indexOf(step);
@@ -211,7 +221,7 @@ export function GuestOrder({ store }) {
       const created = await store.createOrder({
         guestName,
         toppings: selectedToppings,
-        sauce: selectedSauce,
+        sauces: selectedSauces,
         clientRequestId: clientRequestIdRef.current,
       });
 
@@ -254,7 +264,7 @@ export function GuestOrder({ store }) {
         setStep("identity");
         setGuestName("");
         setSelectedToppings([]);
-        setSelectedSauce("");
+        setSelectedSauces([]);
         setOrder(null);
         setError("");
         setIsSubmitting(false);
@@ -411,11 +421,35 @@ export function GuestOrder({ store }) {
           <div className="choice-section sauces-section">
             <div className="section-heading">
               <p className="eyebrow">Sauce signature</p>
-              <h2>Choisis ta sauce</h2>
+              <h2>Choisis tes sauces</h2>
             </div>
             <div className="choice-grid sauces-grid">
+              <button
+                className={`option-card sauce-card no-sauce-card choice-blue mascot-none ${
+                  selectedSauces.includes(noSauceOption.id) ? "selected" : ""
+                }`}
+                type="button"
+                data-option={noSauceOption.id}
+                data-selected={selectedSauces.includes(noSauceOption.id)}
+                onClick={() => toggleSauce(noSauceOption.id)}
+                aria-pressed={selectedSauces.includes(noSauceOption.id)}
+              >
+                <span className="option-card__shadow" aria-hidden="true" />
+                <span className="option-card__accent" aria-hidden="true" />
+                <span className="option-card__art choice-art no-sauce-art">
+                  <X aria-hidden="true" />
+                </span>
+                <span className="option-card__content choice-copy">
+                  <strong>{noSauceOption.shortLabel}</strong>
+                  <small>Cheeseburger nature</small>
+                </span>
+                <span className="option-card__control choice-check" aria-hidden="true">
+                  <Check />
+                </span>
+                <span className="option-card__burst" aria-hidden="true" />
+              </button>
               {sauces.map((item) => {
-                const selected = selectedSauce === item.id;
+                const selected = selectedSauces.includes(item.id);
                 return (
                   <button
                     className={`option-card sauce-card choice-${item.accent} mascot-${item.id} ${selected ? "selected" : ""}`}
@@ -423,7 +457,7 @@ export function GuestOrder({ store }) {
                     type="button"
                     data-option={item.id}
                     data-selected={selected}
-                    onClick={() => setSelectedSauce(item.id)}
+                    onClick={() => toggleSauce(item.id)}
                     aria-pressed={selected}
                   >
                     <span className="option-card__shadow" aria-hidden="true" />
@@ -458,7 +492,7 @@ export function GuestOrder({ store }) {
           <OrderSummary
             guestName={guestName}
             toppings={selectedToppingLabels}
-            sauce={selectedSauceLabel}
+            sauces={selectedSauceLabels}
             submitState={submitState}
           />
         </section>
@@ -496,7 +530,7 @@ export function GuestOrder({ store }) {
           {order.status === "ready" && (
             <InlineNotice tone="success">Ta commande est prête !</InlineNotice>
           )}
-          <PushNotificationPrompt order={order} readyAlert={readyAlert} />
+          <ReadyAlertPanel order={order} readyAlert={readyAlert} />
         </section>
       )}
 
@@ -614,7 +648,7 @@ function ConfettiBurst() {
   );
 }
 
-function OrderSummary({ guestName, toppings: toppingLabels, sauce, submitState }) {
+function OrderSummary({ guestName, toppings: toppingLabels, sauces: sauceLabels, submitState }) {
   const stamp = submitState === "success" ? "Validé" : "À confirmer";
   const now = new Date();
   const ticketDate = new Intl.DateTimeFormat("fr-FR", {
@@ -627,7 +661,8 @@ function OrderSummary({ guestName, toppings: toppingLabels, sauce, submitState }
     minute: "2-digit",
   }).format(now);
   const safeName = guestName.trim().slice(0, 3).toUpperCase() || "SB";
-  const code = `${safeName}-${sauce.slice(0, 2).toUpperCase()}${toppingLabels.length + 1}`;
+  const sauceCode = sauceLabels[0]?.slice(0, 2).toUpperCase() || "SS";
+  const code = `${safeName}-${sauceCode}${toppingLabels.length + 1}`;
 
   return (
     <div className={`ticket-machine ticket-printer ticket-${submitState}`}>
@@ -657,8 +692,8 @@ function OrderSummary({ guestName, toppings: toppingLabels, sauce, submitState }
             <dd>{toppingLabels.length ? toppingLabels.join(", ") : "Sans ajout"}</dd>
           </div>
           <div>
-            <dt>Sauce</dt>
-            <dd>{sauce}</dd>
+            <dt>Sauces</dt>
+            <dd>{sauceLabels.length ? sauceLabels.join(", ") : noSauceOption.label}</dd>
           </div>
         </dl>
       </article>
@@ -671,57 +706,42 @@ function StatusPill({ status }) {
   return <span className={`status-pill status-${current.color}`}>{current.label}</span>;
 }
 
-/*
 function ReadyAlertPanel({ order, readyAlert }) {
   const isReady = order.status === "ready";
   const isFinished = order.status === "served" || order.status === "cancelled";
-  const watchEnabled = readyAlert.trackedOrder?.watchEnabled === true;
-  const notificationsEnabled = readyAlert.trackedOrder?.notificationsEnabled === true;
-  const showFallbackMessage =
-    watchEnabled &&
-    (!readyAlert.notificationSupported || readyAlert.permission === "denied" || !notificationsEnabled);
 
   return (
     <div className={`ready-alert-panel ${isReady ? "ready" : ""}`} aria-live="polite">
       {isReady ? (
         <strong>Ta commande est prête !</strong>
       ) : (
-        <p>On peut te prévenir dès que le stand passe ta commande en prête.</p>
+        <p>Garde cette page ouverte pour être averti lorsque ta commande est prête.</p>
       )}
 
-      {!isReady && !isFinished && !watchEnabled && (
+      {!isReady && !isFinished && !readyAlert.audioUnlocked && (
         <button className="secondary-action compact ready-alert-button" type="button" onClick={readyAlert.enableAlerts}>
-          <Bell aria-hidden="true" />
-          M’avertir quand c’est prêt
+          Activer le son
         </button>
       )}
 
-      {!isReady && !isFinished && watchEnabled && (
-        <span className="ready-alert-state">
-          <BellRing aria-hidden="true" />
-          {notificationsEnabled ? "Alerte activée" : "Alerte dans cette page"}
-        </span>
+      {!isReady && !isFinished && readyAlert.audioUnlocked && (
+        <span className="ready-alert-state">Alerte de page activée</span>
       )}
 
       {readyAlert.message && <small>{readyAlert.message}</small>}
-      {showFallbackMessage && <small>Garde cette page ouverte pour être averti.</small>}
-      {readyAlert.isIosDevice && (
-        <small>Sur iPhone, ajoute Sarah Burger à ton écran d’accueil pour recevoir l’alerte même en quittant Safari.</small>
-      )}
-      {readyAlert.canTestNotification && !isFinished && (
+      {readyAlert.canTestAlert && !isFinished && (
         <button
           className="secondary-action compact ready-alert-test"
           type="button"
           onClick={() => readyAlert.fireReadyAlert({ test: true })}
         >
-          Tester la notification
+          Tester l&apos;alerte
         </button>
       )}
     </div>
   );
 }
 
-*/
 function InlineNotice({ tone, children }) {
   return <p className={`notice notice-${tone}`}>{children}</p>;
 }

@@ -14,8 +14,9 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
-  getSauceLabel,
+  getSauceLabels,
   getToppingLabels,
+  noSauceOption,
   statusOrder,
   statuses,
 } from "../data/menu";
@@ -325,6 +326,7 @@ function OrderTicket({ order, isPending, onChangeStatus }) {
   const previousStatus =
     order.status === "cancelled" ? null : statusOrder[statusOrder.indexOf(order.status) - 1];
   const toppingLabels = getToppingLabels(order.toppings);
+  const sauceLabels = getSauceLabels(order.sauces || order.sauce);
 
   return (
     <article className={`ticket ticket-${status.color}`}>
@@ -342,8 +344,8 @@ function OrderTicket({ order, isPending, onChangeStatus }) {
           <dd>{toppingLabels.length ? toppingLabels.join(", ") : "Sans ajout"}</dd>
         </div>
         <div>
-          <dt>Sauce</dt>
-          <dd>{getSauceLabel(order.sauce)}</dd>
+          <dt>Sauces</dt>
+          <dd>{sauceLabels.length ? sauceLabels.join(", ") : noSauceOption.label}</dd>
         </div>
         <div>
           <dt>Reçue</dt>

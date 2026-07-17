@@ -201,7 +201,8 @@
 }
 
 .mascot-giant[data-selected="true"] .option-card__art img,
-.mascot-ketchup[data-selected="true"] .option-card__art img {
+.mascot-ketchup[data-selected="true"] .option-card__art img,
+.mascot-mustard[data-selected="true"] .option-card__art img {
   animation: bottle-squeeze 420ms var(--ease-pop) both;
 }
 

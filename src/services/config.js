@@ -23,8 +23,6 @@ export const appConfig = {
   eventName: valueFrom(rawConfig.eventName, env.VITE_EVENT_NAME, "18 ans de Sarah"),
   firstOrderNumber: Number(valueFrom(rawConfig.firstOrderNumber, env.VITE_FIRST_ORDER_NUMBER, 18)),
   repositoryName: valueFrom(rawConfig.repositoryName, env.VITE_GITHUB_PAGES_REPO),
-  publicSiteUrl: valueFrom(rawConfig.publicSiteUrl, env.VITE_PUBLIC_SITE_URL),
-  vapidKey: valueFrom(rawConfig.vapidKey, env.VITE_FIREBASE_VAPID_KEY),
   firebaseConfig,
 };
 
