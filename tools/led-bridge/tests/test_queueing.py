@@ -41,10 +41,25 @@ class DisplayQueueTest(unittest.TestCase):
 
         self.assertIsNone(queue.next_event(timeout=0))
 
+    def test_existing_non_ready_orders_are_not_replayed_on_start(self):
+        queue = DisplayQueue()
+
+        self.assertFalse(queue.enqueue(event("a", 18, "served", initial=True)))
+        self.assertFalse(queue.enqueue(event("b", 19, "cancelled", initial=True)))
+        self.assertFalse(queue.enqueue(event("c", 20, "received", initial=True)))
+
+        self.assertIsNone(queue.next_event(timeout=0))
+
+    def test_status_after_initial_snapshot_is_displayed(self):
+        queue = DisplayQueue()
+        self.assertFalse(queue.enqueue(event("a", 18, "received", initial=True)))
+
+        self.assertTrue(queue.enqueue(event("a", 18, "preparing")))
+        self.assertEqual(queue.next_event().status, "preparing")
+
     def test_ready_seen_after_reconnect_is_queued_when_status_changed(self):
         queue = DisplayQueue()
-        queue.enqueue(event("a", 18, "preparing", initial=True))
-        self.assertEqual(queue.next_event().status, "preparing")
+        self.assertFalse(queue.enqueue(event("a", 18, "preparing", initial=True)))
 
         self.assertTrue(queue.enqueue(event("a", 18, "ready", initial=True)))
         self.assertEqual(queue.next_event().status, "ready")

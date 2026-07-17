@@ -203,6 +203,9 @@ Le bridge ecoute Firebase directement. Il detecte donc aussi les changements fai
 
 ## 11. File des commandes pretes
 
+Au demarrage, le bridge lit Firebase pour connaitre l'etat actuel, mais il ne rejoue pas les anciennes commandes deja presentes.
+Il affiche seulement les changements detectes apres son lancement.
+
 Quand une commande passe a `ready`, elle est placee dans une file.
 
 Si plusieurs burgers deviennent prets en meme temps :

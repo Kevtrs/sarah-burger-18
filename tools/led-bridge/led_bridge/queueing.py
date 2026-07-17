@@ -25,9 +25,11 @@ class DisplayQueue:
 
             self._last_status_by_order[event.order_id] = event.status
 
-            if event.status == "ready":
-                if event.initial and previous_status is None and not self._queue_existing_ready_on_start:
+            if event.initial and previous_status is None:
+                if event.status != "ready" or not self._queue_existing_ready_on_start:
                     return False
+
+            if event.status == "ready":
                 if event.order_id not in self._ready_ids:
                     self._ready_queue.append(event)
                     self._ready_ids.add(event.order_id)
