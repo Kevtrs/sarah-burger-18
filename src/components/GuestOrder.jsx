@@ -172,6 +172,7 @@ export function GuestOrder({ store }) {
     if (step === "identity") return guestName.trim().length > 0;
     if (step === "customize") {
       if (isExtraBurger && guestName.trim().length === 0) return false;
+      if (isExtraBurger && isDuplicateName) return false;
       return selectedSauces.length > 0;
     }
     return true;
@@ -182,6 +183,8 @@ export function GuestOrder({ store }) {
     if (!canGoNext()) {
       if (step === "identity" || (step === "customize" && isExtraBurger && !guestName.trim())) {
         setError("Ajoute un prénom avant de continuer.");
+      } else if (step === "customize" && isExtraBurger && isDuplicateName) {
+        setError(`Il y a déjà un burger pour « ${trimmedName} ». Ajoute une précision (ex: initiale du nom) pour les distinguer au comptoir.`);
       } else {
         setError("Choisis une sauce ou Sans sauce.");
       }
