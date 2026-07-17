@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const STORAGE_KEY = "sarah-burger-ready-alert-v1";
+const STORAGE_KEY = "sarah-burger-ready-alert-v2";
 const READY_SOUND_URL = `${import.meta.env.BASE_URL}audio/ready-alert.wav`;
 const READY_FROM_STATUSES = new Set(["received", "preparing"]);
 
@@ -11,16 +11,20 @@ function readStoredAlert() {
     const value = window.localStorage.getItem(STORAGE_KEY);
     if (!value) return null;
     const parsed = JSON.parse(value);
-    if (!parsed || typeof parsed.orderId !== "string" || !parsed.orderId) return null;
-    return {
-      audioUnlocked: parsed.audioUnlocked === true,
-      guestName: typeof parsed.guestName === "string" ? parsed.guestName : "",
-      lastStatus: typeof parsed.lastStatus === "string" ? parsed.lastStatus : "received",
-      number: Number(parsed.number || 0),
-      orderId: parsed.orderId,
-      readyNotified: parsed.readyNotified === true,
-      watchEnabled: parsed.watchEnabled !== false,
-    };
+    if (!parsed || !Array.isArray(parsed.orders)) return null;
+
+    const orders = parsed.orders
+      .filter((item) => item && typeof item.orderId === "string" && item.orderId)
+      .map((item) => ({
+        orderId: item.orderId,
+        guestName: typeof item.guestName === "string" ? item.guestName : "",
+        lastStatus: typeof item.lastStatus === "string" ? item.lastStatus : "received",
+        number: Number(item.number || 0),
+        readyNotified: item.readyNotified === true,
+      }));
+
+    if (!orders.length) return null;
+    return { audioUnlocked: parsed.audioUnlocked === true, orders };
   } catch {
     return null;
   }
@@ -29,7 +33,7 @@ function readStoredAlert() {
 function writeStoredAlert(value) {
   if (typeof window === "undefined") return;
 
-  if (!value?.orderId) {
+  if (!value?.orders?.length) {
     window.localStorage.removeItem(STORAGE_KEY);
     return;
   }
@@ -76,16 +80,14 @@ async function playReadySound(audioRef) {
 }
 
 export function useReadyOrderAlert(store) {
-  const [trackedOrder, setTrackedOrder] = useState(readStoredAlert);
-  const [currentStatus, setCurrentStatus] = useState(() => trackedOrder?.lastStatus || "");
+  const [state, setState] = useState(() => readStoredAlert() || { audioUnlocked: false, orders: [] });
   const [message, setMessage] = useState("");
-  const [readyAnnounced, setReadyAnnounced] = useState(() => trackedOrder?.readyNotified === true);
   const audioRef = useRef(null);
-  const previousStatusRef = useRef(trackedOrder?.lastStatus || "");
-  const notifiedOrderRef = useRef(trackedOrder?.readyNotified ? trackedOrder.orderId : "");
+  const previousStatusRef = useRef(new Map(state.orders.map((item) => [item.orderId, item.lastStatus])));
+  const notifiedRef = useRef(new Set(state.orders.filter((item) => item.readyNotified).map((item) => item.orderId)));
 
-  const updateStoredAlert = useCallback((updater) => {
-    setTrackedOrder((current) => {
+  const updateState = useCallback((updater) => {
+    setState((current) => {
       const next = typeof updater === "function" ? updater(current) : updater;
       if (JSON.stringify(current) === JSON.stringify(next)) return current;
       writeStoredAlert(next);
@@ -97,74 +99,59 @@ export function useReadyOrderAlert(store) {
     (order) => {
       if (!order?.id) return;
 
-      const existing = readStoredAlert();
-      const sameOrder = existing?.orderId === order.id;
-      const next = {
-        audioUnlocked: sameOrder ? existing?.audioUnlocked === true : false,
-        guestName: order.guestName || existing?.guestName || "",
-        lastStatus: order.status || existing?.lastStatus || "received",
-        number: Number(order.number || existing?.number || 0),
-        orderId: order.id,
-        readyNotified: sameOrder ? existing?.readyNotified === true : false,
-        watchEnabled: true,
-      };
+      updateState((current) => {
+        const existing = current.orders.find((item) => item.orderId === order.id);
+        const entry = {
+          orderId: order.id,
+          guestName: order.guestName || existing?.guestName || "",
+          lastStatus: order.status || existing?.lastStatus || "received",
+          number: Number(order.number || existing?.number || 0),
+          readyNotified: existing?.readyNotified === true,
+        };
 
-      previousStatusRef.current = next.lastStatus;
-      notifiedOrderRef.current = next.readyNotified ? next.orderId : "";
-      setCurrentStatus(next.lastStatus);
-      setReadyAnnounced(next.readyNotified);
-      setMessage("Garde cette page ouverte pour être averti lorsque ta commande est prête.");
-      updateStoredAlert(next);
+        previousStatusRef.current.set(order.id, entry.lastStatus);
+        if (entry.readyNotified) notifiedRef.current.add(order.id);
+
+        const others = current.orders.filter((item) => item.orderId !== order.id);
+        return { ...current, orders: [...others, entry] };
+      });
+
+      setMessage("Garde cette page ouverte pour être averti lorsque tes commandes sont prêtes.");
     },
-    [updateStoredAlert],
+    [updateState],
   );
 
-  const clearTrackedOrder = useCallback(() => {
-    previousStatusRef.current = "";
-    notifiedOrderRef.current = "";
-    setCurrentStatus("");
-    setReadyAnnounced(false);
+  const clearTrackedOrders = useCallback(() => {
+    previousStatusRef.current = new Map();
+    notifiedRef.current = new Set();
     setMessage("");
-    updateStoredAlert(null);
-  }, [updateStoredAlert]);
+    updateState({ audioUnlocked: false, orders: [] });
+  }, [updateState]);
 
   const enableAlerts = useCallback(async () => {
-    if (!trackedOrder?.orderId) return;
+    if (!state.orders.length) return;
 
     const audioUnlocked = await unlockAudio(audioRef);
-    updateStoredAlert((current) => {
-      if (!current?.orderId) return current;
-      return {
-        ...current,
-        audioUnlocked,
-        watchEnabled: true,
-      };
-    });
+    updateState((current) => ({ ...current, audioUnlocked }));
 
     setMessage(
       audioUnlocked
         ? "Alerte de page activée. Garde cette page ouverte."
-        : "Garde cette page ouverte pour être averti lorsque ta commande est prête.",
+        : "Garde cette page ouverte pour être averti lorsque tes commandes sont prêtes.",
     );
-  }, [trackedOrder?.orderId, updateStoredAlert]);
+  }, [state.orders.length, updateState]);
 
   const fireReadyAlert = useCallback(
-    async ({ test = false } = {}) => {
-      if (!trackedOrder?.orderId) return;
-      if (!test && notifiedOrderRef.current === trackedOrder.orderId) return;
-
+    async (orderId, { test = false } = {}) => {
       if (!test) {
-        notifiedOrderRef.current = trackedOrder.orderId;
-        setCurrentStatus("ready");
-        setReadyAnnounced(true);
-        updateStoredAlert((current) => {
-          if (!current?.orderId) return current;
-          return {
-            ...current,
-            lastStatus: "ready",
-            readyNotified: true,
-          };
-        });
+        if (!orderId || notifiedRef.current.has(orderId)) return;
+        notifiedRef.current.add(orderId);
+        updateState((current) => ({
+          ...current,
+          orders: current.orders.map((item) =>
+            item.orderId === orderId ? { ...item, lastStatus: "ready", readyNotified: true } : item,
+          ),
+        }));
       }
 
       if (typeof navigator !== "undefined" && "vibrate" in navigator) {
@@ -174,52 +161,50 @@ export function useReadyOrderAlert(store) {
       await playReadySound(audioRef);
       setMessage("Ta commande est prête !");
     },
-    [trackedOrder, updateStoredAlert],
+    [updateState],
   );
 
+  const orderIds = useMemo(() => state.orders.map((item) => item.orderId).join(","), [state.orders]);
+
   useEffect(() => {
-    if (!trackedOrder?.orderId || !store.subscribeOrderStatus) return undefined;
+    if (!store.subscribeOrderStatus || !orderIds) return undefined;
 
-    return store.subscribeOrderStatus(
-      trackedOrder.orderId,
-      (status) => {
-        if (!status) return;
+    const unsubscribers = orderIds.split(",").map((orderId) =>
+      store.subscribeOrderStatus(
+        orderId,
+        (status) => {
+          if (!status) return;
 
-        const previousStatus = previousStatusRef.current || trackedOrder.lastStatus || "";
-        previousStatusRef.current = status;
-        setCurrentStatus(status);
+          const previousStatus = previousStatusRef.current.get(orderId) || "received";
+          previousStatusRef.current.set(orderId, status);
 
-        updateStoredAlert((current) => {
-          if (!current?.orderId) return current;
-          return { ...current, lastStatus: status };
-        });
+          updateState((current) => ({
+            ...current,
+            orders: current.orders.map((item) => (item.orderId === orderId ? { ...item, lastStatus: status } : item)),
+          }));
 
-        if (
-          READY_FROM_STATUSES.has(previousStatus) &&
-          status === "ready" &&
-          trackedOrder.watchEnabled &&
-          !trackedOrder.readyNotified &&
-          notifiedOrderRef.current !== trackedOrder.orderId
-        ) {
-          void fireReadyAlert();
-        }
-      },
-      () => {
-        setMessage("Garde cette page ouverte pour être averti lorsque ta commande est prête.");
-      },
+          if (READY_FROM_STATUSES.has(previousStatus) && status === "ready" && !notifiedRef.current.has(orderId)) {
+            void fireReadyAlert(orderId);
+          }
+        },
+        () => {
+          setMessage("Garde cette page ouverte pour être averti lorsque tes commandes sont prêtes.");
+        },
+      ),
     );
-  }, [fireReadyAlert, store, trackedOrder, updateStoredAlert]);
+
+    return () => unsubscribers.forEach((unsubscribe) => unsubscribe?.());
+  }, [fireReadyAlert, orderIds, store, updateState]);
 
   return {
-    audioUnlocked: trackedOrder?.audioUnlocked === true,
+    audioUnlocked: state.audioUnlocked,
     canTestAlert: import.meta.env.DEV,
-    clearTrackedOrder,
-    currentStatus,
+    clearTrackedOrders,
     enableAlerts,
     fireReadyAlert,
     message,
-    readyAnnounced,
+    readyAnnounced: state.orders.some((item) => item.lastStatus === "ready"),
     trackOrder,
-    trackedOrder,
+    trackedOrders: state.orders,
   };
 }

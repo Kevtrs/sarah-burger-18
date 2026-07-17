@@ -30,6 +30,9 @@ const filters = [
   { id: "all", label: "Toutes" },
 ];
 
+const WAIT_WARN_MINUTES = { received: 10, preparing: 12, ready: 5 };
+const WAIT_HOT_MINUTES = { received: 18, preparing: 20, ready: 10 };
+
 export function KitchenDashboard({ store }) {
   const [orders, setOrders] = useState([]);
   const [filter, setFilter] = useState("active");
@@ -39,6 +42,12 @@ export function KitchenDashboard({ store }) {
   const [authChecked, setAuthChecked] = useState(store.mode === "local");
   const [sessionMeta, setSessionMeta] = useState({});
   const [ordersSnapshotReady, setOrdersSnapshotReady] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
   const { soundEnabled, toggleSound } = useNewOrderSound(orders, {
     archived: Boolean(sessionMeta.archived),
     snapshotReady: ordersSnapshotReady,
@@ -223,6 +232,7 @@ export function KitchenDashboard({ store }) {
             <OrderTicket
               key={order.id}
               order={order}
+              now={now}
               isPending={pendingId === order.id}
               onChangeStatus={changeStatus}
             />
@@ -320,13 +330,14 @@ function EmptyOrders({ filter }) {
   return <p className="empty-state">{text}</p>;
 }
 
-function OrderTicket({ order, isPending, onChangeStatus }) {
+function OrderTicket({ order, now, isPending, onChangeStatus }) {
   const status = statuses[order.status] || statuses.received;
   const nextStatus = status.next;
   const previousStatus =
     order.status === "cancelled" ? null : statusOrder[statusOrder.indexOf(order.status) - 1];
   const toppingLabels = getToppingLabels(order.toppings);
   const sauceLabels = getSauceLabels(order.sauces || order.sauce);
+  const wait = getWaitInfo(order, now);
 
   return (
     <article className={`ticket ticket-${status.color}`}>
@@ -335,7 +346,15 @@ function OrderTicket({ order, isPending, onChangeStatus }) {
           <span className="ticket-number">#{order.number}</span>
           <h2>{order.guestName}</h2>
         </div>
-        <span className={`status-pill status-${status.color}`}>{status.kitchenLabel}</span>
+        <div className="ticket-header-end">
+          {wait && (
+            <span className={`wait-badge${wait.level ? ` wait-badge-${wait.level}` : ""}`}>
+              <Clock3 aria-hidden="true" />
+              {wait.label}
+            </span>
+          )}
+          <span className={`status-pill status-${status.color}`}>{status.kitchenLabel}</span>
+        </div>
       </header>
 
       <dl className="ticket-lines">
@@ -390,6 +409,19 @@ function OrderTicket({ order, isPending, onChangeStatus }) {
       </footer>
     </article>
   );
+}
+
+function getWaitInfo(order, now) {
+  const warnThreshold = WAIT_WARN_MINUTES[order.status];
+  if (warnThreshold === undefined) return null;
+
+  const since = order.status === "ready" ? order.updatedAtMs : order.createdAtMs;
+  const minutes = Math.max(0, Math.floor((now - since) / 60000));
+  const hotThreshold = WAIT_HOT_MINUTES[order.status];
+  const level = minutes >= hotThreshold ? "hot" : minutes >= warnThreshold ? "warn" : null;
+  const label = minutes < 1 ? "À l'instant" : `${minutes} min`;
+
+  return { label, level };
 }
 
 function formatTime(value) {

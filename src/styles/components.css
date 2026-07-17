@@ -819,6 +819,121 @@
   background: var(--color-green-soft);
 }
 
+.notice-warning {
+  background: var(--color-orange-soft);
+}
+
+.extra-guest-field {
+  margin-bottom: 4px;
+}
+
+.field-warning {
+  color: var(--color-orange);
+  font-weight: 900;
+}
+
+.cart-summary {
+  margin: 0 0 4px;
+  padding: 8px 11px;
+  border: var(--border-thin);
+  border-radius: var(--radius-small);
+  background: var(--color-cream-2);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.review-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.cart-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cart-list-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 9px 10px;
+  border: var(--border-thin);
+  border-radius: var(--radius-small);
+  background: white;
+  box-shadow: var(--shadow-small);
+}
+
+.cart-list-name {
+  grid-column: 1;
+  font-weight: 1000;
+  overflow-wrap: anywhere;
+}
+
+.cart-list-detail {
+  grid-column: 1;
+  color: var(--color-muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.cart-list-remove {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: inline-flex;
+  min-width: 36px;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  border: var(--border-thin);
+  border-radius: var(--radius-small);
+  background: var(--color-hot-soft);
+  color: var(--color-hot);
+}
+
+.add-burger-button {
+  width: 100%;
+  min-height: 46px;
+  justify-content: center;
+  gap: 8px;
+}
+
+.group-ticket-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.group-ticket-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: var(--border-standard);
+  border-left-width: 8px;
+  border-radius: var(--radius);
+  background: white;
+  box-shadow: var(--shadow-small);
+}
+
+.group-ticket-number {
+  color: var(--color-red);
+  font-weight: 1000;
+}
+
+.group-ticket-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 1000;
+}
+
 .status-pill,
 .mode-pill {
   display: inline-flex;
@@ -992,6 +1107,39 @@
 
 .ticket header {
   align-items: flex-start;
+}
+
+.ticket-header-end {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+
+.wait-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: var(--radius-small);
+  color: var(--color-muted);
+  font-size: 0.7rem;
+  font-weight: 1000;
+  white-space: nowrap;
+}
+
+.wait-badge svg {
+  width: 12px;
+  height: 12px;
+}
+
+.wait-badge-warn {
+  background: var(--color-orange-soft);
+  color: var(--color-orange);
+}
+
+.wait-badge-hot {
+  background: var(--color-hot-soft);
+  color: var(--color-hot);
 }
 
 .ticket header > div {

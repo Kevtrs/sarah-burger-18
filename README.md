@@ -85,9 +85,12 @@ npm run lint
 npm run build
 npm run preview
 npm run validate
+npm run test
 ```
 
 `npm run validate` attend l'app sur `http://127.0.0.1:5178/`.
+
+`npm run test` exécute les tests unitaires Vitest (normalisation des commandes, store local) sans dépendre de Firebase.
 
 ## Variables d'environnement
 

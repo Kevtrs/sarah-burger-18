@@ -5,6 +5,8 @@ import {
   RotateCcw,
   Send,
   Sparkles,
+  Trash2,
+  UserPlus,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -62,12 +64,16 @@ function withViewTransition(update, transitionName) {
   });
 }
 
+function makeClientRequestId() {
+  return crypto.randomUUID?.() || `order-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 export function GuestOrder({ store }) {
   const [step, setStep] = useState("identity");
   const [guestName, setGuestName] = useState("");
   const [selectedToppings, setSelectedToppings] = useState([]);
   const [selectedSauces, setSelectedSauces] = useState([]);
-  const [order, setOrder] = useState(null);
+  const [cart, setCart] = useState([]);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitState, setSubmitState] = useState("idle");
@@ -79,9 +85,18 @@ export function GuestOrder({ store }) {
     return sessionStorage.getItem(introStorageKey) !== "yes";
   });
   const submitTimersRef = useRef([]);
-  const clientRequestIdRef = useRef(crypto.randomUUID?.() || `order-${Date.now()}`);
+  const clientRequestIdRef = useRef(makeClientRequestId());
   const hasResumedOrderRef = useRef(false);
   const readyAlert = useReadyOrderAlert(store);
+
+  const isExtraBurger = cart.length > 0;
+  const trimmedName = guestName.trim();
+  const isDuplicateName = useMemo(
+    () =>
+      trimmedName.length > 0 &&
+      cart.some((item) => item.guestName.trim().toLowerCase() === trimmedName.toLowerCase()),
+    [cart, trimmedName],
+  );
 
   const selectedToppingLabels = useMemo(
     () => getToppingLabels(selectedToppings),
@@ -90,31 +105,13 @@ export function GuestOrder({ store }) {
   const selectedSauceLabels = useMemo(() => getSauceLabels(selectedSauces), [selectedSauces]);
 
   useEffect(() => {
-    const tracked = readyAlert.trackedOrder;
-    if (hasResumedOrderRef.current || order || step !== "identity" || !tracked?.orderId) return;
+    if (hasResumedOrderRef.current || step !== "identity" || readyAlert.trackedOrders.length === 0) return;
 
     hasResumedOrderRef.current = true;
     sessionStorage.setItem(introStorageKey, "yes");
     setShowIntro(false);
-    setOrder({
-      guestName: tracked.guestName || "",
-      id: tracked.orderId,
-      number: tracked.number,
-      status: readyAlert.currentStatus || tracked.lastStatus || "received",
-    });
     setStep("done");
-  }, [order, readyAlert.currentStatus, readyAlert.trackedOrder, step]);
-
-  useEffect(() => {
-    if (!order?.id || !readyAlert.currentStatus) return;
-
-    setOrder((current) => {
-      if (!current || current.id !== order.id || current.status === readyAlert.currentStatus) {
-        return current;
-      }
-      return { ...current, status: readyAlert.currentStatus };
-    });
-  }, [order?.id, readyAlert.currentStatus]);
+  }, [step, readyAlert.trackedOrders]);
 
   useEffect(() => store.subscribeConnection?.(setIsOnline), [store]);
 
@@ -173,14 +170,21 @@ export function GuestOrder({ store }) {
 
   function canGoNext() {
     if (step === "identity") return guestName.trim().length > 0;
-    if (step === "customize") return selectedSauces.length > 0;
+    if (step === "customize") {
+      if (isExtraBurger && guestName.trim().length === 0) return false;
+      return selectedSauces.length > 0;
+    }
     return true;
   }
 
   function goNext() {
     setError("");
     if (!canGoNext()) {
-      setError(step === "identity" ? "Ajoute ton prénom avant de continuer." : "Choisis une sauce ou Sans sauce.");
+      if (step === "identity" || (step === "customize" && isExtraBurger && !guestName.trim())) {
+        setError("Ajoute un prénom avant de continuer.");
+      } else {
+        setError("Choisis une sauce ou Sans sauce.");
+      }
       return;
     }
     const index = steps.indexOf(step);
@@ -199,7 +203,32 @@ export function GuestOrder({ store }) {
     }
   }
 
-  async function submitOrder() {
+  function addAnotherBurger() {
+    setError("");
+    const savedClientRequestId = clientRequestIdRef.current;
+    setCart((current) => [
+      ...current,
+      {
+        localId: makeClientRequestId(),
+        clientRequestId: savedClientRequestId,
+        guestName,
+        toppings: selectedToppings,
+        sauces: selectedSauces,
+      },
+    ]);
+    setGuestName("");
+    setSelectedToppings([]);
+    setSelectedSauces([]);
+    clientRequestIdRef.current = makeClientRequestId();
+    withViewTransition(() => flushSync(() => setStep("customize")), "review-to-customize");
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }
+
+  function removeFromCart(localId) {
+    setCart((current) => current.filter((item) => item.localId !== localId));
+  }
+
+  async function submitAll() {
     if (isSubmitting || submitState === "loading") return;
     if (sessionMeta.archived) {
       setError("La session de commandes est archivée.");
@@ -212,27 +241,40 @@ export function GuestOrder({ store }) {
       return;
     }
 
+    const items = [
+      ...cart,
+      {
+        localId: "current",
+        clientRequestId: clientRequestIdRef.current,
+        guestName,
+        toppings: selectedToppings,
+        sauces: selectedSauces,
+      },
+    ];
+
     clearSubmitTimers();
     setIsSubmitting(true);
     setSubmitState("loading");
     setError("");
 
     try {
-      const created = await store.createOrder({
-        guestName,
-        toppings: selectedToppings,
-        sauces: selectedSauces,
-        clientRequestId: clientRequestIdRef.current,
-      });
+      for (const item of items) {
+        const created = await store.createOrder({
+          guestName: item.guestName,
+          toppings: item.toppings,
+          sauces: item.sauces,
+          clientRequestId: item.clientRequestId,
+        });
+        readyAlert.trackOrder(created);
+      }
 
-      readyAlert.trackOrder(created);
+      setCart([]);
       setSubmitState("success");
       setShowConfetti(true);
 
       const revealTimer = window.setTimeout(() => {
         withViewTransition(() => {
           flushSync(() => {
-            setOrder(created);
             setStep("done");
           });
         }, "review-to-done");
@@ -258,19 +300,19 @@ export function GuestOrder({ store }) {
 
   function reset() {
     clearSubmitTimers();
-    readyAlert.clearTrackedOrder();
+    readyAlert.clearTrackedOrders();
     withViewTransition(() => {
       flushSync(() => {
         setStep("identity");
         setGuestName("");
         setSelectedToppings([]);
         setSelectedSauces([]);
-        setOrder(null);
+        setCart([]);
         setError("");
         setIsSubmitting(false);
         setSubmitState("idle");
         setShowConfetti(false);
-        clientRequestIdRef.current = crypto.randomUUID?.() || `order-${Date.now()}`;
+        clientRequestIdRef.current = makeClientRequestId();
       });
     }, "done-to-identity");
   }
@@ -311,7 +353,7 @@ export function GuestOrder({ store }) {
     return (
       <>
         <Send aria-hidden="true" />
-        <span className="cta-button__label">Envoyer</span>
+        <span className="cta-button__label">{cart.length ? `Envoyer ${cart.length + 1} commandes` : "Envoyer"}</span>
       </>
     );
   }
@@ -380,6 +422,26 @@ export function GuestOrder({ store }) {
             <p className="eyebrow">Cheeseburger collector</p>
             <h1 id="customize-title">Compose ton burger</h1>
           </div>
+
+          {isExtraBurger && <CartSummary cart={cart} />}
+
+          {isExtraBurger && (
+            <label className="field extra-guest-field">
+              <span>Prénom de cette personne</span>
+              <input
+                value={guestName}
+                maxLength={32}
+                autoComplete="off"
+                placeholder="Ex. Léa"
+                onChange={(event) => setGuestName(event.target.value)}
+              />
+              {isDuplicateName && (
+                <small className="field-warning">
+                  Il y a déjà un burger pour « {trimmedName} » dans cette commande.
+                </small>
+              )}
+            </label>
+          )}
 
           <div className="choice-section toppings-section">
             <div className="section-heading">
@@ -489,49 +551,35 @@ export function GuestOrder({ store }) {
             <p className="muted">Relis vite, puis envoie la commande au stand Sarah Burger.</p>
             <img src={assetPath("ketchup.svg")} alt="" aria-hidden="true" />
           </div>
-          <OrderSummary
-            guestName={guestName}
-            toppings={selectedToppingLabels}
-            sauces={selectedSauceLabels}
-            submitState={submitState}
-          />
+          <div className="review-panel">
+            {cart.length > 0 && <CartList cart={cart} onRemove={removeFromCart} />}
+            <OrderSummary
+              guestName={guestName}
+              toppings={selectedToppingLabels}
+              sauces={selectedSauceLabels}
+              submitState={submitState}
+            />
+            {isDuplicateName && (
+              <InlineNotice tone="warning">
+                Il y a déjà un burger pour « {trimmedName} » dans cette commande.
+              </InlineNotice>
+            )}
+            {submitState !== "loading" && submitState !== "success" && (
+              <button className="secondary-action add-burger-button" type="button" onClick={addAnotherBurger}>
+                <UserPlus aria-hidden="true" />
+                Ajouter un burger pour quelqu&apos;un d&apos;autre
+              </button>
+            )}
+          </div>
         </section>
       )}
 
-      {step === "done" && order && (
-        <section
-          className={`order-screen done-layout success-scene ${
-            order.status === "ready" || readyAlert.readyAnnounced ? "ready-alert-fired" : ""
-          }`}
-          aria-labelledby="done-title"
-          aria-live="polite"
-        >
-          <div className="success-copy">
-            <p className="eyebrow">Ticket validé</p>
-            <h1 id="done-title">{order.status === "ready" ? "Ta commande est prête !" : "Commande envoyée"}</h1>
-          </div>
-          <div className="number-stage success-number-wrap" aria-label={`Numéro de commande ${order.number}`}>
-            <span className="success-number__burst" aria-hidden="true" />
-            <img className="success-mascot success-mascot-left" src={assetPath("bigmac.svg")} alt="" aria-hidden="true" />
-            <span className="order-number success-number">#{order.number}</span>
-            <img className="success-mascot success-mascot-right" src={assetPath("onions.svg")} alt="" aria-hidden="true" />
-          </div>
-          <p className="success-note muted">
-            {order.status === "ready"
-              ? "Viens la récupérer au stand Sarah Burger."
-              : "Ta commande entre en cuisine. Garde bien ton numéro."}
-          </p>
-          <div className="success-ticket" aria-hidden="true">
-            <span>SARAH BURGER</span>
-            <strong>#{order.number}</strong>
-            <small>{guestName || order.guestName}</small>
-          </div>
-          <StatusPill status={order.status} />
-          {order.status === "ready" && (
-            <InlineNotice tone="success">Ta commande est prête !</InlineNotice>
-          )}
-          <ReadyAlertPanel order={order} readyAlert={readyAlert} />
-        </section>
+      {step === "done" && readyAlert.trackedOrders.length > 0 && (
+        readyAlert.trackedOrders.length === 1 ? (
+          <SingleDoneScreen entry={readyAlert.trackedOrders[0]} readyAlert={readyAlert} />
+        ) : (
+          <GroupDoneScreen orders={readyAlert.trackedOrders} readyAlert={readyAlert} />
+        )
       )}
 
       <div className="sticky-actions">
@@ -549,7 +597,7 @@ export function GuestOrder({ store }) {
             className={`primary-action cta-button submit-action submit-${submitState}`}
             type="button"
             data-state={submitState}
-            onClick={submitOrder}
+            onClick={submitAll}
             disabled={
               isSubmitting ||
               submitState === "loading" ||
@@ -648,6 +696,39 @@ function ConfettiBurst() {
   );
 }
 
+function CartSummary({ cart }) {
+  const names = cart.map((item) => item.guestName).filter(Boolean);
+  return (
+    <p className="cart-summary">
+      {cart.length} burger{cart.length > 1 ? "s" : ""} déjà ajouté{cart.length > 1 ? "s" : ""}
+      {names.length ? ` (${names.join(", ")})` : ""}
+    </p>
+  );
+}
+
+function CartList({ cart, onRemove }) {
+  return (
+    <ul className="cart-list">
+      {cart.map((item) => (
+        <li key={item.localId} className="cart-list-item">
+          <span className="cart-list-name">{item.guestName || "Sans prénom"}</span>
+          <span className="cart-list-detail">
+            {getSauceLabels(item.sauces).join(", ") || noSauceOption.label}
+          </span>
+          <button
+            className="cart-list-remove"
+            type="button"
+            onClick={() => onRemove(item.localId)}
+            aria-label={`Retirer le burger de ${item.guestName || "cette personne"}`}
+          >
+            <Trash2 aria-hidden="true" />
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function OrderSummary({ guestName, toppings: toppingLabels, sauces: sauceLabels, submitState }) {
   const stamp = submitState === "success" ? "Validé" : "À confirmer";
   const now = new Date();
@@ -706,25 +787,95 @@ function StatusPill({ status }) {
   return <span className={`status-pill status-${current.color}`}>{current.label}</span>;
 }
 
-function ReadyAlertPanel({ order, readyAlert }) {
-  const isReady = order.status === "ready";
-  const isFinished = order.status === "served" || order.status === "cancelled";
+function SingleDoneScreen({ entry, readyAlert }) {
+  const isReady = entry.lastStatus === "ready";
 
   return (
-    <div className={`ready-alert-panel ${isReady ? "ready" : ""}`} aria-live="polite">
-      {isReady ? (
+    <section
+      className={`order-screen done-layout success-scene ${
+        isReady || readyAlert.readyAnnounced ? "ready-alert-fired" : ""
+      }`}
+      aria-labelledby="done-title"
+      aria-live="polite"
+    >
+      <div className="success-copy">
+        <p className="eyebrow">Ticket validé</p>
+        <h1 id="done-title">{isReady ? "Ta commande est prête !" : "Commande envoyée"}</h1>
+      </div>
+      <div className="number-stage success-number-wrap" aria-label={`Numéro de commande ${entry.number}`}>
+        <span className="success-number__burst" aria-hidden="true" />
+        <img className="success-mascot success-mascot-left" src={assetPath("bigmac.svg")} alt="" aria-hidden="true" />
+        <span className="order-number success-number">#{entry.number}</span>
+        <img className="success-mascot success-mascot-right" src={assetPath("onions.svg")} alt="" aria-hidden="true" />
+      </div>
+      <p className="success-note muted">
+        {isReady
+          ? "Viens la récupérer au stand Sarah Burger."
+          : "Ta commande entre en cuisine. Garde bien ton numéro."}
+      </p>
+      <div className="success-ticket" aria-hidden="true">
+        <span>SARAH BURGER</span>
+        <strong>#{entry.number}</strong>
+        <small>{entry.guestName}</small>
+      </div>
+      <StatusPill status={entry.lastStatus} />
+      {isReady && <InlineNotice tone="success">Ta commande est prête !</InlineNotice>}
+      <ReadyAlertPanel readyAlert={readyAlert} anyReady={isReady} />
+    </section>
+  );
+}
+
+function GroupDoneScreen({ orders, readyAlert }) {
+  const anyReady = orders.some((item) => item.lastStatus === "ready");
+
+  return (
+    <section
+      className={`order-screen done-layout group-done-layout ${anyReady ? "ready-alert-fired" : ""}`}
+      aria-labelledby="done-title"
+      aria-live="polite"
+    >
+      <div className="success-copy">
+        <p className="eyebrow">{orders.length} tickets validés</p>
+        <h1 id="done-title">{anyReady ? "Une commande est prête !" : "Commandes envoyées"}</h1>
+      </div>
+      <ul className="group-ticket-list">
+        {orders.map((item) => {
+          const status = statuses[item.lastStatus] || statuses.received;
+          return (
+            <li key={item.orderId} className={`group-ticket-item ticket-${status.color}`}>
+              <span className="group-ticket-number">#{item.number}</span>
+              <span className="group-ticket-name">{item.guestName}</span>
+              <StatusPill status={item.lastStatus} />
+            </li>
+          );
+        })}
+      </ul>
+      <p className="success-note muted">Garde ces numéros. Viens récupérer chaque burger dès qu&apos;il est prêt.</p>
+      <ReadyAlertPanel readyAlert={readyAlert} anyReady={anyReady} />
+    </section>
+  );
+}
+
+function ReadyAlertPanel({ readyAlert, anyReady }) {
+  const isFinished =
+    readyAlert.trackedOrders.length > 0 &&
+    readyAlert.trackedOrders.every((item) => item.lastStatus === "served" || item.lastStatus === "cancelled");
+
+  return (
+    <div className={`ready-alert-panel ${anyReady ? "ready" : ""}`} aria-live="polite">
+      {anyReady ? (
         <strong>Ta commande est prête !</strong>
       ) : (
         <p>Garde cette page ouverte pour être averti lorsque ta commande est prête.</p>
       )}
 
-      {!isReady && !isFinished && !readyAlert.audioUnlocked && (
+      {!anyReady && !isFinished && !readyAlert.audioUnlocked && (
         <button className="secondary-action compact ready-alert-button" type="button" onClick={readyAlert.enableAlerts}>
           Activer le son
         </button>
       )}
 
-      {!isReady && !isFinished && readyAlert.audioUnlocked && (
+      {!anyReady && !isFinished && readyAlert.audioUnlocked && (
         <span className="ready-alert-state">Alerte de page activée</span>
       )}
 
@@ -733,7 +884,7 @@ function ReadyAlertPanel({ order, readyAlert }) {
         <button
           className="secondary-action compact ready-alert-test"
           type="button"
-          onClick={() => readyAlert.fireReadyAlert({ test: true })}
+          onClick={() => readyAlert.fireReadyAlert(readyAlert.trackedOrders[0]?.orderId, { test: true })}
         >
           Tester l&apos;alerte
         </button>

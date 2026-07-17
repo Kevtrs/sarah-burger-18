@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
     "lint": "eslint .",
+    "test": "vitest run",
     "validate": "node scripts/validate.mjs"
   },
   "dependencies": {
@@ -23,6 +24,8 @@
     "eslint-plugin-react": "^7.37.2",
     "eslint-plugin-react-hooks": "^5.1.0",
     "globals": "^15.14.0",
-    "playwright-core": "^1.61.1"
+    "jsdom": "^29.1.1",
+    "playwright-core": "^1.61.1",
+    "vitest": "^4.1.10"
   }
 }
