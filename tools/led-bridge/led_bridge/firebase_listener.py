@@ -43,11 +43,17 @@ class FirebaseOrdersWatcher:
 
     def _url(self, path: str) -> str:
         clean_path = "/".join(quote(part, safe="") for part in path.strip("/").split("/") if part)
-        return f"{self.config.database_url}/{clean_path}.json?auth={self._token()}"
+        return f"{self.config.database_url}/{clean_path}.json?access_token={self._token()}"
+
+    def _raise_for_status(self, response: requests.Response, context: str) -> None:
+        if response.ok:
+            return
+        detail = response.text.strip().replace("\n", " ")[:200]
+        raise RuntimeError(f"Firebase HTTP {response.status_code} sur {context}: {detail}")
 
     def fetch_all(self) -> dict[str, dict]:
         response = self._http.get(self._url(f"sessions/{self.config.session_id}/orders"), timeout=20)
-        response.raise_for_status()
+        self._raise_for_status(response, "lecture des commandes")
         data = response.json() or {}
         if not isinstance(data, dict):
             return {}
@@ -58,7 +64,7 @@ class FirebaseOrdersWatcher:
             self._url(f"sessions/{self.config.session_id}/orders/{order_id}"),
             timeout=20,
         )
-        response.raise_for_status()
+        self._raise_for_status(response, f"lecture de la commande {order_id}")
         data = response.json()
         return data if isinstance(data, dict) else None
 
@@ -88,7 +94,7 @@ class FirebaseOrdersWatcher:
             stream=True,
             timeout=(10, 70),
         ) as response:
-            response.raise_for_status()
+            self._raise_for_status(response, "ecoute temps reel")
             event_name = ""
             data_lines: list[str] = []
             last_activity = time.monotonic()
