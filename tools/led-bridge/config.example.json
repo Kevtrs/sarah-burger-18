@@ -1,0 +1,9 @@
+{
+  "device_address": "6A:0B:5F:BC:79:7B",
+  "firebase_api_key": "COLLE_ICI_LA_CLE_API_FIREBASE",
+  "firebase_database_url": "https://TON-PROJET-default-rtdb.europe-west1.firebasedatabase.app",
+  "event_id": "sarah-18-2026",
+  "poll_seconds": 2,
+  "ready_display_seconds": 20,
+  "idle_gif": "burger_construction_raw_compatible_6s.gif"
+}
