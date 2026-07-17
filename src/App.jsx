@@ -3,7 +3,6 @@ import { BrandHeader } from "./components/BrandHeader";
 import { GuestOrder } from "./components/GuestOrder";
 import { KitchenDashboard } from "./components/KitchenDashboard";
 import { createOrderStore } from "./services/orderStore";
-import { notifyLedBridge } from "./services/ledBridge";
 
 function routeFromHash() {
   return window.location.hash.replace("#", "") === "stand" ? "kitchen" : "order";
@@ -15,25 +14,7 @@ function hashFromRoute(route) {
 
 export default function App() {
   const [route, setRouteState] = useState(routeFromHash);
-  const store = useMemo(() => {
-    const baseStore = createOrderStore();
-    let orderCache = [];
-
-    return {
-      ...baseStore,
-      subscribeOrders(onChange, onError) {
-        return baseStore.subscribeOrders((orders) => {
-          orderCache = orders;
-          onChange(orders);
-        }, onError);
-      },
-      async updateStatus(orderId, status) {
-        const matchedOrder = orderCache.find((order) => order.id === orderId);
-        await baseStore.updateStatus(orderId, status);
-        if (matchedOrder) void notifyLedBridge(matchedOrder, status);
-      },
-    };
-  }, []);
+  const store = useMemo(() => createOrderStore(), []);
 
   useEffect(() => {
     const handler = () => setRouteState(routeFromHash());

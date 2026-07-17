@@ -1,5 +1,19 @@
 {
-  "bluetooth_address": "6A:0B:5F:BC:79:7B",
-  "host": "127.0.0.1",
-  "port": 8765
+  "firebase": {
+    "database_url": "https://sarah-burger-18-default-rtdb.europe-west1.firebasedatabase.app",
+    "service_account_path": "service-account.json",
+    "session_id": "sarah-18-2026"
+  },
+  "panel": {
+    "bluetooth_address": "6A:0B:5F:BC:79:7B",
+    "ready_display_seconds": 20,
+    "status_display_seconds": 5,
+    "reconnect_delay_seconds": 5,
+    "brightness": null,
+    "idle_gif_path": "assets/idle.gif"
+  },
+  "behavior": {
+    "queue_existing_ready_on_start": false
+  },
+  "generated_dir": "generated"
 }
