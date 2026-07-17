@@ -24,6 +24,13 @@ export const toppings = [
     asset: "onions.svg",
     accent: "gold",
   },
+  {
+    id: "bacon",
+    label: "Bacon",
+    note: "Croustillant et fumé",
+    asset: "bacon.png",
+    accent: "red",
+  },
 ];
 
 export const sauces = [

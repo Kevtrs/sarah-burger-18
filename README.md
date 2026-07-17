@@ -34,10 +34,10 @@ Le mode local reste disponible si Firebase n'est pas configuré. Il sert aux tes
 - `sarah-logo.svg` : identité principale.
 - `menu-reference.svg` : burger de base.
 - `checker.svg` : motif de fond.
-- `pickles.svg`, `jalapeno.svg`, `onions.svg` : ajouts.
+- `pickles.svg`, `jalapeno.svg`, `onions.svg`, `bacon.png` : ajouts.
 - `bigmac.svg`, `giant.svg`, `mayo.svg`, `ketchup.svg`, `spicy.svg`, `mustard.png` : sauces.
 
-Les illustrations originales ne sont pas modifiées. L'asset `mustard.png` est ajouté dans `public/assets/` et utilisé comme mascotte de la sauce moutarde.
+Les illustrations originales ne sont pas modifiées. Les assets `mustard.png` et `bacon.png` sont ajoutés dans `public/assets/` comme mascottes (moutarde, bacon).
 
 ## Menu
 
@@ -51,7 +51,8 @@ Ajouts au choix :
 
 - cornichons ;
 - jalapeños ;
-- oignons frits.
+- oignons frits ;
+- bacon.
 
 Sauces :
 

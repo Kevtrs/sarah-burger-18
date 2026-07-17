@@ -553,6 +553,10 @@
   transform: scale(1.14) rotate(var(--option-rotate, 0deg));
 }
 
+.mascot-bacon .option-card__art img {
+  transform: scale(1.14) rotate(var(--option-rotate, 0deg));
+}
+
 .no-sauce-art {
   display: grid;
   place-items: center;

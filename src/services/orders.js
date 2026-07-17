@@ -20,7 +20,7 @@ import {
 
 const LOCAL_EVENT = "sarah-burger-local-orders-changed";
 const INVALID_FIREBASE_KEY = /[.#$[\]/]/;
-const allowedToppings = ["pickles", "jalapenos", "onions"];
+const allowedToppings = ["pickles", "jalapenos", "onions", "bacon"];
 const allowedSauces = ["bigmac", "giant", "mayo", "ketchup", "spicy", "mustard"];
 const allowedStatuses = ["received", "preparing", "ready", "served", "cancelled"];
 const noSauceId = "none";

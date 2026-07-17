@@ -189,6 +189,15 @@
   animation: crumb-burst 430ms var(--ease-page) both;
 }
 
+.mascot-bacon[data-selected="true"] .option-card__art img {
+  animation: acid-pop 450ms var(--ease-pop) both;
+}
+
+.mascot-bacon[data-selected="true"] .option-card__burst {
+  color: var(--color-hot);
+  animation: crumb-burst 420ms var(--ease-page) both;
+}
+
 .mascot-bigmac[data-selected="true"] .option-card__art img {
   animation: bottle-squeeze 430ms var(--ease-pop) both;
 }
