@@ -21,7 +21,9 @@ import {
 const LOCAL_EVENT = "sarah-burger-local-orders-changed";
 const INVALID_FIREBASE_KEY = /[.#$[\]/]/;
 const allowedToppings = ["pickles", "jalapenos", "onions"];
+const allowedSauces = ["bigmac", "giant", "mayo", "ketchup", "spicy", "mustard"];
 const allowedStatuses = ["received", "preparing", "ready", "served", "cancelled"];
+const noSauceId = "none";
 
 export function assertValidFirebaseKey(value, label) {
   if (
@@ -41,24 +43,55 @@ function cleanName(name) {
   return name.trim().replace(/\s+/g, " ").slice(0, 32);
 }
 
-function normalizeArray(value) {
-  if (Array.isArray(value)) return value.filter((item) => allowedToppings.includes(item));
+function normalizeArray(value, allowedValues) {
+  if (Array.isArray(value)) return value.filter((item) => allowedValues.includes(item));
   if (value && typeof value === "object") {
     return Object.entries(value)
-      .filter(([key, selected]) => selected === true && allowedToppings.includes(key))
+      .filter(([key, selected]) => selected === true && allowedValues.includes(key))
       .map(([key]) => key);
   }
   return [];
 }
 
 function serializeToppings(value) {
-  return normalizeArray(value).reduce((acc, id) => {
+  return normalizeArray(value, allowedToppings).reduce((acc, id) => {
     acc[id] = true;
     return acc;
   }, {});
 }
 
+function normalizeSauces(value, legacySauce = "") {
+  if (value && typeof value === "object" && !Array.isArray(value) && value[noSauceId] === true) {
+    return [noSauceId];
+  }
+
+  if (Array.isArray(value) && value.includes(noSauceId)) return [noSauceId];
+  if (value === noSauceId) return [noSauceId];
+
+  const selected = normalizeArray(value, allowedSauces);
+  if (selected.length) return selected;
+
+  if (legacySauce === noSauceId) return [noSauceId];
+  if (allowedSauces.includes(legacySauce)) return [legacySauce];
+  return [];
+}
+
+function serializeSauces(value) {
+  const selected = normalizeSauces(value);
+  const ids = selected.length ? selected : [noSauceId];
+  return ids.reduce((acc, id) => {
+    acc[id] = true;
+    return acc;
+  }, {});
+}
+
+function legacySauceValue(value) {
+  const selected = normalizeSauces(value);
+  return selected.includes(noSauceId) ? noSauceId : selected[0] || noSauceId;
+}
+
 export function normalizeOrder(data) {
+  const sauces = normalizeSauces(data.sauces, data.sauce);
   return {
     id: data.id,
     sessionId: data.sessionId || sessionId,
@@ -66,8 +99,9 @@ export function normalizeOrder(data) {
     guestUid: data.guestUid || "",
     number: Number(data.number),
     guestName: data.guestName || "",
-    toppings: normalizeArray(data.toppings),
-    sauce: data.sauce || "",
+    toppings: normalizeArray(data.toppings, allowedToppings),
+    sauce: data.sauce || legacySauceValue(sauces),
+    sauces,
     status: allowedStatuses.includes(data.status) ? data.status : "received",
     createdAtMs: Number(data.createdAtMs || Date.now()),
     updatedAtMs: Number(data.updatedAtMs || data.createdAtMs || Date.now()),
@@ -83,35 +117,10 @@ function normalizeClientRequestId(value) {
   return crypto.randomUUID?.() || `order-${Date.now()}`;
 }
 
-function cleanPlatform(value) {
-  if (typeof value !== "string") return "web";
-  return value.replace(/[^a-z0-9_-]/gi, "").slice(0, 32) || "web";
-}
-
-function bytesToBase64Url(bytes) {
-  let binary = "";
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte);
-  });
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-async function createPushSubscriptionId(token) {
-  if (typeof token !== "string" || token.length < 20) {
-    throw new Error("Token push invalide.");
-  }
-
-  if (crypto.subtle && typeof TextEncoder !== "undefined") {
-    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
-    return `sub_${bytesToBase64Url(new Uint8Array(digest)).slice(0, 48)}`;
-  }
-
-  return `sub_${crypto.randomUUID?.() || Date.now()}`;
-}
-
 function createOrderPayload(input, number, user) {
   const now = Date.now();
   const clientRequestId = normalizeClientRequestId(input.clientRequestId);
+  const sauces = serializeSauces(input.sauces);
 
   return {
     id: clientRequestId,
@@ -121,7 +130,8 @@ function createOrderPayload(input, number, user) {
     number,
     guestName: cleanName(input.guestName),
     toppings: serializeToppings(input.toppings),
-    sauce: input.sauce,
+    sauce: legacySauceValue(sauces),
+    sauces,
     status: "received",
     createdAtMs: now,
     updatedAtMs: now,
@@ -277,39 +287,6 @@ function makeFirebaseOrderStore() {
       });
     },
 
-    async savePushSubscription(order, token, options = {}) {
-      const user = await ensureGuestAuth();
-      const { db } = requireFirebaseRuntime();
-      const orderId = order?.id || order?.orderId;
-      const orderNumber = Number(order?.number || 0);
-      const subscriptionId = await createPushSubscriptionId(token);
-
-      assertSessionKey();
-      assertValidFirebaseKey(orderId, "orderId");
-      assertValidFirebaseKey(subscriptionId, "subscriptionId");
-
-      if (!orderNumber) throw new Error("Numéro de commande introuvable pour l'alerte push.");
-
-      const subscriptionRef = ref(db, sessionPath(`pushSubscriptions/${orderId}/${subscriptionId}`));
-      const existing = await get(subscriptionRef);
-      const payload = {
-        enabled: true,
-        orderId,
-        orderNumber,
-        ownerUid: user.uid,
-        platform: cleanPlatform(options.platform),
-        token,
-        updatedAtMs: serverTimestamp(),
-      };
-
-      if (!existing.exists()) {
-        payload.createdAtMs = serverTimestamp();
-      }
-
-      await update(subscriptionRef, payload);
-      return { orderId, subscriptionId };
-    },
-
     async archiveSession() {
       await archiveFirebaseSession();
     },
@@ -444,21 +421,6 @@ function makeLocalStore() {
           : order,
       );
       writeOrders(orders);
-    },
-
-    async savePushSubscription(order, token, options = {}) {
-      const subscriptionId = await createPushSubscriptionId(token || crypto.randomUUID?.() || String(Date.now()));
-      localStorage.setItem(
-        `sarah-burger:${sessionId}:push:${order.id}`,
-        JSON.stringify({
-          enabled: true,
-          orderId: order.id,
-          orderNumber: order.number,
-          platform: cleanPlatform(options.platform),
-          subscriptionId,
-        }),
-      );
-      return { orderId: order.id, subscriptionId };
     },
 
     async archiveSession() {

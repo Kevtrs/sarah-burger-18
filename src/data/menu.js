@@ -62,7 +62,22 @@ export const sauces = [
     asset: "spicy.svg",
     accent: "hot",
   },
+  {
+    id: "mustard",
+    label: "Moutarde",
+    shortLabel: "Moutarde",
+    asset: "mustard.png",
+    accent: "gold",
+  },
 ];
+
+export const noSauceOption = {
+  id: "none",
+  label: "Sans sauce",
+  shortLabel: "Sans sauce",
+};
+
+export const sauceIds = sauces.map((item) => item.id);
 
 export const statuses = {
   received: {
@@ -105,6 +120,34 @@ export function getToppingLabels(ids) {
     .filter(Boolean);
 }
 
-export function getSauceLabel(id) {
-  return sauces.find((item) => item.id === id)?.label ?? "";
+export function normalizeSauceIds(value) {
+  if (Array.isArray(value)) {
+    const selected = value.filter((id) => sauceIds.includes(id));
+    return value.includes(noSauceOption.id) && selected.length === 0 ? [noSauceOption.id] : selected;
+  }
+
+  if (typeof value === "string") {
+    if (value === noSauceOption.id) return [noSauceOption.id];
+    return sauceIds.includes(value) ? [value] : [];
+  }
+
+  if (value && typeof value === "object") {
+    if (value[noSauceOption.id] === true) return [noSauceOption.id];
+    return sauceIds.filter((id) => value[id] === true);
+  }
+
+  return [];
+}
+
+export function getSauceLabels(value) {
+  const ids = normalizeSauceIds(value);
+  if (ids.includes(noSauceOption.id)) return [noSauceOption.label];
+
+  return ids
+    .map((id) => sauces.find((item) => item.id === id)?.label)
+    .filter(Boolean);
+}
+
+export function getSauceLabel(value) {
+  return getSauceLabels(value).join(", ");
 }

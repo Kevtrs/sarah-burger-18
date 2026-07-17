@@ -51,8 +51,8 @@
           ".indexOn": ["number", "status", "guestUid", "createdAtMs"],
           "$orderId": {
             ".read": "auth != null && (!data.exists() || root.child('kitchenUsers').child(auth.uid).val() == true || data.child('guestUid').val() == auth.uid)",
-            ".write": "auth != null && ((!data.exists() && newData.exists() && root.child('sessions').child($sessionId).child('meta').child('archived').val() != true && newData.child('id').val() == $orderId && newData.child('clientRequestId').val() == $orderId && newData.child('sessionId').val() == $sessionId && newData.child('guestUid').val() == auth.uid && newData.child('status').val() == 'received') || (data.exists() && newData.exists() && root.child('kitchenUsers').child(auth.uid).val() == true && newData.child('id').val() == data.child('id').val() && newData.child('clientRequestId').val() == data.child('clientRequestId').val() && newData.child('sessionId').val() == data.child('sessionId').val() && newData.child('guestUid').val() == data.child('guestUid').val() && newData.child('number').val() == data.child('number').val() && newData.child('guestName').val() == data.child('guestName').val() && newData.child('sauce').val() == data.child('sauce').val() && newData.child('toppings/pickles').val() == data.child('toppings/pickles').val() && newData.child('toppings/jalapenos').val() == data.child('toppings/jalapenos').val() && newData.child('toppings/onions').val() == data.child('toppings/onions').val() && newData.child('createdAtMs').val() == data.child('createdAtMs').val()))",
-            ".validate": "newData.hasChildren(['id', 'sessionId', 'clientRequestId', 'guestUid', 'number', 'guestName', 'sauce', 'status', 'createdAtMs', 'updatedAtMs'])",
+            ".write": "auth != null && ((!data.exists() && newData.exists() && root.child('sessions').child($sessionId).child('meta').child('archived').val() != true && newData.child('id').val() == $orderId && newData.child('clientRequestId').val() == $orderId && newData.child('sessionId').val() == $sessionId && newData.child('guestUid').val() == auth.uid && newData.child('status').val() == 'received' && newData.child('sauces').exists()) || (data.exists() && newData.exists() && root.child('kitchenUsers').child(auth.uid).val() == true && newData.child('id').val() == data.child('id').val() && newData.child('clientRequestId').val() == data.child('clientRequestId').val() && newData.child('sessionId').val() == data.child('sessionId').val() && newData.child('guestUid').val() == data.child('guestUid').val() && newData.child('number').val() == data.child('number').val() && newData.child('guestName').val() == data.child('guestName').val() && newData.child('sauce').val() == data.child('sauce').val() && newData.child('sauces/none').val() == data.child('sauces/none').val() && newData.child('sauces/bigmac').val() == data.child('sauces/bigmac').val() && newData.child('sauces/giant').val() == data.child('sauces/giant').val() && newData.child('sauces/mayo').val() == data.child('sauces/mayo').val() && newData.child('sauces/ketchup').val() == data.child('sauces/ketchup').val() && newData.child('sauces/spicy').val() == data.child('sauces/spicy').val() && newData.child('sauces/mustard').val() == data.child('sauces/mustard').val() && newData.child('toppings/pickles').val() == data.child('toppings/pickles').val() && newData.child('toppings/jalapenos').val() == data.child('toppings/jalapenos').val() && newData.child('toppings/onions').val() == data.child('toppings/onions').val() && newData.child('createdAtMs').val() == data.child('createdAtMs').val()))",
+            ".validate": "newData.hasChildren(['id', 'sessionId', 'clientRequestId', 'guestUid', 'number', 'guestName', 'status', 'createdAtMs', 'updatedAtMs']) && (newData.child('sauce').exists() || newData.child('sauces').exists())",
             "id": {
               ".validate": "newData.isString() && newData.val() == $orderId && newData.val().length >= 8 && newData.val().length <= 80"
             },
@@ -87,7 +87,34 @@
               }
             },
             "sauce": {
-              ".validate": "newData.isString() && (newData.val() == 'bigmac' || newData.val() == 'giant' || newData.val() == 'mayo' || newData.val() == 'ketchup' || newData.val() == 'spicy')"
+              ".validate": "newData.isString() && (newData.val() == 'none' || newData.val() == 'bigmac' || newData.val() == 'giant' || newData.val() == 'mayo' || newData.val() == 'ketchup' || newData.val() == 'spicy' || newData.val() == 'mustard')"
+            },
+            "sauces": {
+              ".validate": "newData.hasChildren() && ((newData.child('none').val() == true && !newData.child('bigmac').exists() && !newData.child('giant').exists() && !newData.child('mayo').exists() && !newData.child('ketchup').exists() && !newData.child('spicy').exists() && !newData.child('mustard').exists()) || (!newData.child('none').exists() && (newData.child('bigmac').val() == true || newData.child('giant').val() == true || newData.child('mayo').val() == true || newData.child('ketchup').val() == true || newData.child('spicy').val() == true || newData.child('mustard').val() == true)))",
+              "none": {
+                ".validate": "newData.isBoolean() && newData.val() == true"
+              },
+              "bigmac": {
+                ".validate": "newData.isBoolean() && newData.val() == true"
+              },
+              "giant": {
+                ".validate": "newData.isBoolean() && newData.val() == true"
+              },
+              "mayo": {
+                ".validate": "newData.isBoolean() && newData.val() == true"
+              },
+              "ketchup": {
+                ".validate": "newData.isBoolean() && newData.val() == true"
+              },
+              "spicy": {
+                ".validate": "newData.isBoolean() && newData.val() == true"
+              },
+              "mustard": {
+                ".validate": "newData.isBoolean() && newData.val() == true"
+              },
+              "$other": {
+                ".validate": false
+              }
             },
             "status": {
               ".validate": "newData.isString() && (newData.val() == 'received' || newData.val() == 'preparing' || newData.val() == 'ready' || newData.val() == 'served' || newData.val() == 'cancelled')"
@@ -102,65 +129,6 @@
               ".validate": false
             }
           }
-        },
-        "pushSubscriptions": {
-          ".read": false,
-          ".write": false,
-          "$orderId": {
-            ".read": false,
-            ".write": false,
-            "$subscriptionId": {
-              ".read": "auth != null && data.exists() && data.child('ownerUid').val() == auth.uid",
-              ".write": "auth != null && root.child('sessions').child($sessionId).child('orders').child($orderId).child('guestUid').val() == auth.uid && newData.exists() && newData.child('ownerUid').val() == auth.uid && newData.child('orderId').val() == $orderId && (!data.exists() || (data.child('ownerUid').val() == auth.uid && newData.child('ownerUid').val() == data.child('ownerUid').val() && newData.child('orderId').val() == data.child('orderId').val() && newData.child('createdAtMs').val() == data.child('createdAtMs').val()))",
-              ".validate": "newData.hasChildren(['token', 'orderId', 'orderNumber', 'ownerUid', 'createdAtMs', 'updatedAtMs', 'platform', 'enabled'])",
-              "token": {
-                ".validate": "newData.isString() && newData.val().length >= 20 && newData.val().length <= 4096"
-              },
-              "orderId": {
-                ".validate": "newData.isString() && newData.val() == $orderId"
-              },
-              "orderNumber": {
-                ".validate": "newData.isNumber() && newData.val() >= 18"
-              },
-              "ownerUid": {
-                ".validate": "newData.isString() && newData.val() == auth.uid"
-              },
-              "createdAtMs": {
-                ".validate": "newData.isNumber()"
-              },
-              "updatedAtMs": {
-                ".validate": "newData.isNumber()"
-              },
-              "platform": {
-                ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 32"
-              },
-              "enabled": {
-                ".validate": "newData.isBoolean()"
-              },
-              "notificationSent": {
-                ".validate": "data.exists() && newData.val() == data.val()"
-              },
-              "notifiedAtMs": {
-                ".validate": "data.exists() && newData.val() == data.val()"
-              },
-              "lastSentAtMs": {
-                ".validate": "data.exists() && newData.val() == data.val()"
-              },
-              "disabledAtMs": {
-                ".validate": "data.exists() && newData.val() == data.val()"
-              },
-              "lastError": {
-                ".validate": "data.exists() && newData.val() == data.val()"
-              },
-              "$other": {
-                ".validate": false
-              }
-            }
-          }
-        },
-        "readyNotifications": {
-          ".read": false,
-          ".write": false
         }
       }
     }

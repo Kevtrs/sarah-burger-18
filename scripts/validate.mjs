@@ -24,6 +24,51 @@ async function checkOverflow(page) {
   }));
 }
 
+async function checkStickyActions(page, label) {
+  const metrics = await page.evaluate(() => {
+    const bar = document.querySelector(".sticky-actions");
+    const buttons = Array.from(bar?.querySelectorAll("button") || []);
+    const barRect = bar?.getBoundingClientRect();
+    const buttonRects = buttons.map((button) => {
+      const rect = button.getBoundingClientRect();
+      return {
+        bottom: rect.bottom,
+        height: rect.height,
+        text: button.innerText,
+        top: rect.top,
+        width: rect.width,
+      };
+    });
+
+    return {
+      buttonRects,
+      exists: Boolean(bar),
+      barBottom: barRect?.bottom || 0,
+      barHeight: barRect?.height || 0,
+      barTop: barRect?.top || 0,
+      viewportHeight: window.innerHeight,
+    };
+  });
+
+  if (!metrics.exists || metrics.buttonRects.length === 0) {
+    throw new Error(`Sticky actions missing at ${label}: ${JSON.stringify(metrics)}`);
+  }
+
+  const hiddenButton = metrics.buttonRects.find(
+    (rect) =>
+      rect.height < 36 ||
+      rect.width < 42 ||
+      rect.bottom > metrics.viewportHeight + 1 ||
+      rect.top < -1,
+  );
+
+  if (hiddenButton || metrics.barBottom > metrics.viewportHeight + 1) {
+    throw new Error(`Sticky actions are not reachable at ${label}: ${JSON.stringify(metrics)}`);
+  }
+
+  return metrics;
+}
+
 async function openKitchen(page) {
   await page.goto(`${appUrl}/#stand`);
 
@@ -82,7 +127,8 @@ async function exerciseMascotSelection(page) {
   const toppingCards = page.locator("button.choice-card");
   const sauceCards = page.locator("button.sauce-card");
   const onionsCard = toppingCards.nth(2);
-  const spicyCard = sauceCards.nth(4);
+  const spicyCard = sauceCards.nth(5);
+  const mustardCard = sauceCards.nth(6);
 
   await onionsCard.click();
   const onionsSelected = await assertMascotVisible(page, onionsCard, "Oignons frits selected");
@@ -94,18 +140,24 @@ async function exerciseMascotSelection(page) {
 
   await spicyCard.click();
   const spicySelected = await assertMascotVisible(page, spicyCard, "Sauce piquante selected");
-  await sauceCards.nth(0).click();
-  const spicyUnselected = await assertMascotVisible(page, spicyCard, "Sauce piquante unselected");
+  await sauceCards.nth(1).click();
+  const spicyStillSelected = await assertMascotVisible(page, spicyCard, "Sauce piquante co-selected");
   await spicyCard.click();
-  const spicySelectedAgain = await assertMascotVisible(page, spicyCard, "Sauce piquante selected again");
+  const spicyUnselected = await assertMascotVisible(page, spicyCard, "Sauce piquante unselected");
+  await mustardCard.click();
+  const mustardSelected = await assertMascotVisible(page, mustardCard, "Moutarde selected");
+  await mustardCard.click();
+  const mustardUnselected = await assertMascotVisible(page, mustardCard, "Moutarde unselected");
 
   return {
     onionsSelected,
     onionsUnselected,
     onionsSelectedAgain,
     spicySelected,
+    spicyStillSelected,
     spicyUnselected,
-    spicySelectedAgain,
+    mustardSelected,
+    mustardUnselected,
   };
 }
 
@@ -206,32 +258,8 @@ async function run() {
 
     window.AudioContext = TestAudioContext;
     window.webkitAudioContext = TestAudioContext;
-    window.__notificationRequests = 0;
     window.__readyAlertSoundPlays = 0;
-    window.__readyNotifications = [];
     window.__readyVibrations = [];
-    window.__nextNotificationPermission = "granted";
-
-    class TestNotification {
-      static permission = "default";
-
-      static requestPermission() {
-        window.__notificationRequests += 1;
-        TestNotification.permission = window.__nextNotificationPermission;
-        return Promise.resolve(TestNotification.permission);
-      }
-
-      constructor(title, options = {}) {
-        this.title = title;
-        this.options = options;
-        window.__readyNotifications.push({ title, body: options.body, tag: options.tag });
-      }
-    }
-
-    Object.defineProperty(window, "Notification", {
-      configurable: true,
-      value: TestNotification,
-    });
 
     Object.defineProperty(navigator, "vibrate", {
       configurable: true,
@@ -262,11 +290,15 @@ async function run() {
   await toppingCards.nth(1).click();
 
   const sauceCards = page.locator("button.sauce-card");
-  if ((await sauceCards.count()) !== 5) throw new Error("Expected 5 sauce cards.");
-  await sauceCards.nth(1).click();
+  if ((await sauceCards.count()) !== 7) throw new Error("Expected 7 sauce cards.");
+  await sauceCards.nth(2).click();
+  await sauceCards.nth(6).click();
 
   await page.getByRole("button", { name: "Continuer" }).click();
   const reviewText = await page.locator(".summary-list").innerText();
+  if (!reviewText.includes("Giant") || !reviewText.includes("Moutarde")) {
+    throw new Error(`Multiple sauces are missing from the review: ${reviewText}`);
+  }
   await page.getByRole("button", { name: "Envoyer" }).click();
   await page.locator(".order-number").waitFor();
 
@@ -276,22 +308,18 @@ async function run() {
   };
 
   await page.locator(".ready-alert-button").click();
-  await page.locator(".ready-alert-state", { hasText: "Alerte dans cette page" }).waitFor();
+  await page.locator(".ready-alert-state", { hasText: "Alerte de page activée" }).waitFor();
 
   const readyPermission = await page.evaluate(() => ({
-    notificationRequests: window.__notificationRequests,
     readyAlertSoundPlays: window.__readyAlertSoundPlays,
     stored: JSON.parse(window.localStorage.getItem("sarah-burger-ready-alert-v1")),
   }));
-  if (readyPermission.notificationRequests !== 0) {
-    throw new Error("Ready notification permission was requested without push config.");
-  }
   if (readyPermission.readyAlertSoundPlays !== 0) {
     throw new Error("Ready alert sound played while only unlocking audio.");
   }
   if (
     !readyPermission.stored?.orderId ||
-    readyPermission.stored.notificationsEnabled !== false ||
+    readyPermission.stored.audioUnlocked !== true ||
     readyPermission.stored.watchEnabled !== true
   ) {
     throw new Error("Ready alert fallback preference/order was not stored.");
@@ -314,6 +342,10 @@ async function run() {
   await remoteOrderPage.close();
 
   await kitchenPage.locator(".ticket", { hasText: "Mila" }).waitFor();
+  const noSauceTicketText = await kitchenPage.locator(".ticket", { hasText: "Mila" }).innerText();
+  if (!noSauceTicketText.includes("Sans sauce")) {
+    throw new Error(`No-sauce order is missing in kitchen ticket: ${noSauceTicketText}`);
+  }
   await kitchenPage.waitForTimeout(900);
 
   const soundAfterNewOrder = await kitchenPage.evaluate(() => window.__newOrderDingStarts || 0);
@@ -328,13 +360,11 @@ async function run() {
   await page.waitForTimeout(900);
 
   const readyBeforeReady = await page.evaluate(() => ({
-    notificationCount: window.__readyNotifications.length,
     soundPlays: window.__readyAlertSoundPlays,
     title: document.querySelector("#done-title")?.innerText,
     vibrationCount: window.__readyVibrations.length,
   }));
   if (
-    readyBeforeReady.notificationCount !== 0 ||
     readyBeforeReady.soundPlays !== 0 ||
     readyBeforeReady.vibrationCount !== 0 ||
     readyBeforeReady.title !== "Commande envoyée"
@@ -352,15 +382,12 @@ async function run() {
   await page.locator("#done-title", { hasText: "Ta commande est prête !" }).waitFor();
 
   const readyAfterReady = await page.evaluate(() => ({
-    notification: window.__readyNotifications[0],
-    notificationCount: window.__readyNotifications.length,
     soundPlays: window.__readyAlertSoundPlays,
     stored: JSON.parse(window.localStorage.getItem("sarah-burger-ready-alert-v1")),
     title: document.querySelector("#done-title")?.innerText,
     vibrationCount: window.__readyVibrations.length,
   }));
   if (
-    readyAfterReady.notificationCount !== 0 ||
     readyAfterReady.soundPlays !== 1 ||
     readyAfterReady.vibrationCount !== 1 ||
     readyAfterReady.stored?.readyNotified !== true ||
@@ -373,13 +400,11 @@ async function run() {
   await page.locator("#done-title", { hasText: "Ta commande est prête !" }).waitFor();
   await page.waitForTimeout(900);
   const readyAfterClientReload = await page.evaluate(() => ({
-    notificationCount: window.__readyNotifications.length,
     soundPlays: window.__readyAlertSoundPlays,
     stored: JSON.parse(window.localStorage.getItem("sarah-burger-ready-alert-v1")),
     vibrationCount: window.__readyVibrations.length,
   }));
   if (
-    readyAfterClientReload.notificationCount !== 0 ||
     readyAfterClientReload.soundPlays !== 0 ||
     readyAfterClientReload.vibrationCount !== 0 ||
     readyAfterClientReload.stored?.readyNotified !== true
@@ -411,23 +436,17 @@ async function run() {
   const deniedPage = await mobileContext.newPage();
   recordErrors(deniedPage, consoleErrors);
   await submitOrderFromPage(deniedPage, "Noe", 0, 2);
-  await deniedPage.evaluate(() => {
-    window.Notification.permission = "default";
-    window.__nextNotificationPermission = "denied";
-  });
   await deniedPage.locator(".ready-alert-button").click();
   await deniedPage.locator(".ready-alert-panel", { hasText: "Garde cette page ouverte" }).waitFor();
 
   const deniedPermission = await deniedPage.evaluate(() => ({
-    notificationRequests: window.__notificationRequests,
     stored: JSON.parse(window.localStorage.getItem("sarah-burger-ready-alert-v1")),
   }));
   if (
-    deniedPermission.notificationRequests !== 0 ||
-    deniedPermission.stored?.notificationsEnabled !== false ||
+    deniedPermission.stored?.audioUnlocked !== true ||
     deniedPermission.stored?.watchEnabled !== true
   ) {
-    throw new Error(`Denied notification preference was not stored: ${JSON.stringify(deniedPermission)}`);
+    throw new Error(`Page alert preference was not stored: ${JSON.stringify(deniedPermission)}`);
   }
 
   const deniedTicket = kitchenPage.locator(".ticket", { hasText: "Noe" });
@@ -439,12 +458,10 @@ async function run() {
   await deniedPage.locator("#done-title", { hasText: "Ta commande est prête !" }).waitFor();
 
   const deniedReadyAlert = await deniedPage.evaluate(() => ({
-    notificationCount: window.__readyNotifications.length,
     soundPlays: window.__readyAlertSoundPlays,
     vibrationCount: window.__readyVibrations.length,
   }));
   if (
-    deniedReadyAlert.notificationCount !== 0 ||
     deniedReadyAlert.soundPlays !== 1 ||
     deniedReadyAlert.vibrationCount !== 1
   ) {
@@ -486,11 +503,16 @@ async function run() {
 
   const viewportMetrics = [];
   const viewports = [
-    { width: 360, height: 780, name: "mobile-360" },
-    { width: 390, height: 844, name: "mobile-390" },
-    { width: 430, height: 932, name: "mobile-430" },
-    { width: 768, height: 1024, name: "tablet-768" },
-    { width: 1280, height: 900, name: "desktop-1280" },
+    { width: 320, height: 568, name: "mobile-320x568" },
+    { width: 360, height: 640, name: "mobile-360x640" },
+    { width: 375, height: 667, name: "mobile-375x667" },
+    { width: 390, height: 844, name: "mobile-390x844" },
+    { width: 393, height: 852, name: "mobile-393x852" },
+    { width: 412, height: 915, name: "mobile-412x915" },
+    { width: 430, height: 932, name: "mobile-430x932" },
+    { width: 667, height: 375, name: "landscape-667x375" },
+    { width: 768, height: 1024, name: "tablet-768x1024" },
+    { width: 1280, height: 900, name: "desktop-1280x900" },
   ];
 
   for (const viewport of viewports) {
@@ -506,19 +528,27 @@ async function run() {
     if (orderMetrics.overflowing) {
       throw new Error(`Order layout overflows horizontally at ${viewport.name}.`);
     }
+    const stickyIdentity = await checkStickyActions(viewportPage, `${viewport.name} identity`);
     await viewportPage.locator('input[placeholder="Ex. Sarah"]').fill("Vue");
     await viewportPage.getByRole("button", { name: "Continuer" }).click();
+    const stickyCustomize = await checkStickyActions(viewportPage, `${viewport.name} customize`);
     await viewportPage.locator("button.choice-card").nth(2).click();
     const viewportOnions = await assertMascotVisible(
       viewportPage,
       viewportPage.locator("button.choice-card").nth(2),
       `Oignons frits ${viewport.name}`,
     );
-    await viewportPage.locator("button.sauce-card").nth(4).click();
+    await viewportPage.locator("button.sauce-card").nth(5).click();
     const viewportSpicy = await assertMascotVisible(
       viewportPage,
-      viewportPage.locator("button.sauce-card").nth(4),
+      viewportPage.locator("button.sauce-card").nth(5),
       `Sauce piquante ${viewport.name}`,
+    );
+    await viewportPage.locator("button.sauce-card").nth(6).click();
+    const viewportMustard = await assertMascotVisible(
+      viewportPage,
+      viewportPage.locator("button.sauce-card").nth(6),
+      `Moutarde ${viewport.name}`,
     );
     await openKitchen(viewportPage);
     const kitchenMetrics = await checkOverflow(viewportPage);
@@ -529,7 +559,8 @@ async function run() {
       name: viewport.name,
       orderMetrics,
       kitchenMetrics,
-      mascotMetrics: { onions: viewportOnions, spicy: viewportSpicy },
+      stickyMetrics: { identity: stickyIdentity, customize: stickyCustomize },
+      mascotMetrics: { onions: viewportOnions, spicy: viewportSpicy, mustard: viewportMustard },
     });
     await context.close();
   }

@@ -98,6 +98,13 @@
   margin: 0 auto;
 }
 
+.guest-layout {
+  min-height: calc(100svh - 76px);
+  min-height: calc(100dvh - 76px);
+  grid-template-rows: auto minmax(0, auto) auto;
+  align-content: start;
+}
+
 .progress {
   position: relative;
   display: grid;
@@ -523,7 +530,7 @@
 
 .sauce-card .option-card__art {
   width: 100%;
-  height: 48px;
+  height: 54px;
 }
 
 .option-card__art img {
@@ -540,6 +547,26 @@
 
 .sauce-card .option-card__art img {
   transform: rotate(var(--option-rotate, 0deg));
+}
+
+.mascot-mustard .option-card__art img {
+  transform: scale(1.14) rotate(var(--option-rotate, 0deg));
+}
+
+.no-sauce-art {
+  display: grid;
+  place-items: center;
+}
+
+.no-sauce-art svg {
+  width: 42px;
+  height: 42px;
+  padding: 8px;
+  border: var(--border-standard);
+  border-radius: 50%;
+  background: white;
+  color: var(--color-red);
+  box-shadow: var(--shadow-small);
 }
 
 .option-card__content {
@@ -649,7 +676,7 @@
 }
 
 .sticky-actions {
-  position: static;
+  position: sticky;
   right: 0;
   bottom: 0;
   left: 0;
@@ -657,10 +684,12 @@
   display: flex;
   gap: 9px;
   width: 100%;
-  padding: 10px;
+  padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
   margin: 0;
   background: rgba(255, 250, 240, 0.96);
+  border-top: 2px solid rgba(23, 18, 15, 0.1);
   box-shadow: 0 -10px 24px rgba(23, 18, 15, 0.08);
+  backdrop-filter: blur(8px);
 }
 
 .primary-action,
@@ -1140,10 +1169,8 @@ dd {
   .sticky-actions {
     width: min(560px, 100%);
     margin-left: auto;
-    padding-right: 0;
-    padding-left: 0;
-    background: transparent;
-    box-shadow: none;
+    padding-right: 10px;
+    padding-left: 10px;
   }
 
   .ticket-grid {

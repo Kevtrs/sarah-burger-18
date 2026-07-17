@@ -5,7 +5,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 
 export default [
   {
-    ignores: ["dist/**", "node_modules/**", "functions/node_modules/**"],
+    ignores: ["dist/**", "node_modules/**"],
   },
   js.configs.recommended,
   {
@@ -17,14 +17,6 @@ export default [
         document: "readonly",
         window: "readonly",
       },
-    },
-  },
-  {
-    files: ["functions/**/*.js"],
-    languageOptions: {
-      ecmaVersion: 2023,
-      globals: globals.node,
-      sourceType: "commonjs",
     },
   },
   {

@@ -42,9 +42,10 @@ body::after {
   z-index: 1;
   isolation: isolate;
   width: min(1180px, 100%);
+  min-height: 100svh;
   min-height: 100dvh;
   margin: 0 auto;
-  padding: 12px 10px 96px;
+  padding: 12px 10px 0;
 }
 
 .ambient-stickers {
@@ -97,7 +98,7 @@ body::after {
 
 @media (min-width: 720px) {
   .app-shell {
-    padding: 18px 22px 48px;
+    padding: 18px 22px 0;
   }
 }
 
