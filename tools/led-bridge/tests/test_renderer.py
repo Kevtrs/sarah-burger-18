@@ -6,8 +6,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from led_bridge.models import validate_order_event
-from led_bridge.renderer import choose_number_font, render_message, render_order, text_size
+from led_bridge.models import STATUS_LABELS, validate_order_event
+from led_bridge.renderer import choose_number_font, render_message, render_order, render_order_grid, text_size
 from led_bridge.virtual_display import VirtualDisplay64
 
 
@@ -54,12 +54,36 @@ class RendererTest(unittest.TestCase):
                 self.assertEqual(image.size, (64, 64))
                 self.assertIsNotNone(image.crop((2, 16, 62, 48)).getbbox())
 
+    def test_preparing_label_is_prepa(self):
+        self.assertEqual(STATUS_LABELS["preparing"], "PREPA")
+
+    def test_multiple_orders_render_as_grid(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            events = [
+                validate_order_event({"orderId": "order-39", "number": 39, "guestName": "Kevin", "status": "received"}),
+                validate_order_event({"orderId": "order-40", "number": 40, "guestName": "Sarah", "status": "preparing"}),
+                validate_order_event({"orderId": "order-41", "number": 41, "guestName": "Mila", "status": "ready"}),
+            ]
+            path = render_order_grid(events, Path(tmp))
+            with Image.open(path) as image:
+                self.assertEqual(image.size, (64, 64))
+                self.assertIsNotNone(image.crop((0, 0, 32, 32)).getbbox())
+                self.assertIsNotNone(image.crop((32, 0, 64, 32)).getbbox())
+
     def test_message_render(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = render_message("idle", Path(tmp), detail="STAND")
             with Image.open(path) as image:
                 self.assertEqual(image.size, (64, 64))
                 self.assertIsNotNone(image.getbbox())
+
+    def test_idle_message_is_simple_text_screen(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = render_message("idle", Path(tmp), detail="SARAH")
+            with Image.open(path) as image:
+                self.assertEqual(image.size, (64, 64))
+                self.assertNotEqual(image.getpixel((1, 1)), (0, 0, 0))
+                self.assertIsNotNone(image.crop((4, 10, 60, 58)).getbbox())
 
     def test_virtual_display_splits_into_four_panels(self):
         display = VirtualDisplay64()

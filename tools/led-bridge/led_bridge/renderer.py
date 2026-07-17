@@ -8,6 +8,9 @@ from PIL import Image, ImageDraw, ImageFont
 from .models import OrderEvent, STATUS_COLORS
 from .virtual_display import BLACK, HEIGHT, WHITE, WIDTH, VirtualDisplay64, font
 
+ACTIVE_STATUSES = {"received", "preparing", "ready"}
+ACTIVE_SORT = {"ready": 0, "preparing": 1, "received": 2}
+
 
 def _safe_filename(value: str) -> str:
     safe = "".join(char if char.isalnum() or char in "-_" else "_" for char in value)
@@ -86,16 +89,28 @@ def _draw_guest_name(display: VirtualDisplay64, guest_name: str) -> None:
     display.draw.text((WIDTH // 2, 39), lines[1], font=line_font, fill=WHITE, anchor="mm")
 
 
+def _status_dim(color: tuple[int, int, int]) -> tuple[int, int, int]:
+    return tuple(max(0, channel // 3) for channel in color)
+
+
+def _draw_status_strip(display: VirtualDisplay64, label: str, color: tuple[int, int, int]) -> None:
+    display.draw.rectangle((2, 2, 61, 14), fill=_status_dim(color), outline=color)
+    _draw_centered(
+        display,
+        label,
+        3,
+        _fit_font(label, max_size=11, min_size=8, max_width=56, max_height=10),
+        color,
+    )
+
+
 def render_order(event: OrderEvent, output_dir: Path) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     display = VirtualDisplay64()
     color = STATUS_COLORS[event.status]
-    dim = tuple(max(0, channel // 3) for channel in color)
 
     display.draw.rectangle((0, 0, 63, 63), outline=color, width=2)
-    display.draw.rectangle((2, 2, 61, 14), fill=dim, outline=color)
-    _draw_centered(display, event.led_label, 3, _fit_font(event.led_label, max_size=11, min_size=8, max_width=56, max_height=10), color)
-
+    _draw_status_strip(display, event.led_label, color)
     _draw_guest_name(display, event.guest_name)
 
     number_text = f"#{event.number}"
@@ -107,8 +122,92 @@ def render_order(event: OrderEvent, output_dir: Path) -> Path:
     return path
 
 
+def _short_name(value: str, max_chars: int = 7) -> str:
+    cleaned = _clean_display_name(value)
+    if len(cleaned) <= max_chars:
+        return cleaned
+    compact = cleaned.replace(" ", "")
+    return compact[:max_chars] if compact else cleaned[:max_chars]
+
+
+def _draw_order_slot(display: VirtualDisplay64, event: OrderEvent, box: tuple[int, int, int, int]) -> None:
+    x1, y1, x2, y2 = box
+    color = STATUS_COLORS[event.status]
+    display.draw.rectangle((x1, y1, x2 - 1, y2 - 1), outline=color)
+    display.draw.rectangle((x1 + 1, y1 + 1, x2 - 2, y1 + 7), fill=_status_dim(color))
+
+    status_font = _fit_font(event.led_label, max_size=6, min_size=5, max_width=28, max_height=6)
+    display.draw.text(((x1 + x2) // 2, y1 + 1), event.led_label, font=status_font, fill=color, anchor="ma")
+
+    name = _short_name(event.guest_name)
+    name_font = _fit_font(name, max_size=11, min_size=6, max_width=29, max_height=12)
+    display.draw.text(((x1 + x2) // 2, y1 + 18), name, font=name_font, fill=WHITE, anchor="mm")
+
+    number_text = f"#{event.number}"
+    number_font = _fit_font(number_text, max_size=7, min_size=5, max_width=22, max_height=7)
+    display.draw.text(((x1 + x2) // 2, y2 - 8), number_text, font=number_font, fill=(210, 210, 210), anchor="ma")
+
+
+def _active_sort_key(event: OrderEvent) -> tuple[int, int]:
+    return (ACTIVE_SORT.get(event.status, 9), event.number)
+
+
+def render_order_grid(events: list[OrderEvent], output_dir: Path, *, page: int = 0) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    active_events = sorted([event for event in events if event.status in ACTIVE_STATUSES], key=_active_sort_key)
+    display = VirtualDisplay64()
+
+    slots = [
+        (0, 0, 32, 32),
+        (32, 0, 64, 32),
+        (0, 32, 32, 64),
+        (32, 32, 64, 64),
+    ]
+
+    if not active_events:
+        return render_message("idle", output_dir, detail="SARAH")
+
+    start = (page * 4) % len(active_events)
+    page_events = active_events[start : start + 4]
+    if len(page_events) < min(4, len(active_events)):
+        page_events.extend(active_events[: min(4, len(active_events)) - len(page_events)])
+
+    for slot, event in zip(slots, page_events):
+        _draw_order_slot(display, event, slot)
+
+    if len(active_events) > 4:
+        page_count = (len(active_events) + 3) // 4
+        label = f"{(page % page_count) + 1}/{page_count}"
+        display.draw.rectangle((47, 55, 63, 63), fill=(0, 0, 0))
+        display.draw.text((55, 55), label, font=font(6, bold=True), fill=(255, 176, 42), anchor="ma")
+
+    path = output_dir / f"active-orders-page-{page + 1}.png"
+    display.save(path)
+    return path
+
+
+def _draw_idle_screen(display: VirtualDisplay64) -> None:
+    pink = (232, 20, 82)
+    cream = (255, 238, 190)
+    dim = (80, 36, 50)
+
+    display.clear(BLACK)
+    display.draw.rectangle((0, 0, 63, 63), outline=pink, width=2)
+    display.draw.rectangle((3, 3, 60, 60), outline=dim)
+    display.draw.text((WIDTH // 2, 13), "SARAH", font=font(15, bold=True), fill=cream, anchor="ma")
+    display.draw.text((WIDTH // 2, 31), "BURGER", font=font(11, bold=True), fill=pink, anchor="ma")
+    display.draw.text((WIDTH // 2, 49), "ATTENTE", font=font(7, bold=True), fill=(170, 170, 170), anchor="ma")
+
+
 def render_message(kind: str, output_dir: Path, *, detail: str = "") -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
+    if kind == "idle":
+        display = VirtualDisplay64()
+        _draw_idle_screen(display)
+        path = output_dir / "idle.png"
+        display.save(path)
+        return path
+
     color_by_kind = {
         "startup": (255, 176, 42),
         "connected": (80, 235, 96),

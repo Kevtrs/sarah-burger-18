@@ -8,7 +8,7 @@ ALLOWED_STATUSES = ("received", "preparing", "ready", "served", "cancelled")
 
 STATUS_LABELS = {
     "received": "RECU",
-    "preparing": "CUIT",
+    "preparing": "PREPA",
     "ready": "PRET",
     "served": "SERVI",
     "cancelled": "ANNULE",
@@ -16,7 +16,7 @@ STATUS_LABELS = {
 
 STATUS_LOG_LABELS = {
     "received": "RECUE",
-    "preparing": "EN COURS",
+    "preparing": "EN PREPA",
     "ready": "PRETE",
     "served": "SERVIE",
     "cancelled": "ANNULEE",

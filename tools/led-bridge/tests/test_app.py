@@ -87,6 +87,32 @@ class WorkerDisplayTest(unittest.TestCase):
         self.assertIn("order-order-39-preparing.png", sent_names)
         self.assertLess(elapsed, 0.8)
 
+    def test_multiple_active_orders_use_grid_display(self):
+        stop_event = threading.Event()
+        panel = FakePanel()
+        queue = ScriptedQueue(
+            stop_event,
+            [
+                event("order-39", 39, "received"),
+                event("order-40", 40, "preparing"),
+            ],
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = SimpleNamespace(
+                generated_dir=Path(tmp),
+                panel=SimpleNamespace(
+                    ready_display_seconds=1,
+                    status_display_seconds=1,
+                    rotation_seconds=3,
+                ),
+            )
+
+            run_worker(config, queue, panel, stop_event)
+
+        sent_names = [path.name for path in panel.sent]
+        self.assertIn("active-orders-page-1.png", sent_names)
+
 
 if __name__ == "__main__":
     unittest.main()

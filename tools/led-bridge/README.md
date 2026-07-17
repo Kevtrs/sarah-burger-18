@@ -17,7 +17,9 @@ Affichage :
 
 - le prenom est affiche en grand au centre ;
 - le numero est affiche en petit en bas ;
-- le statut est affiche dans un bandeau en haut : `RECU`, `CUIT`, `PRET`, `SERVI` ou `ANNULE`.
+- le statut est affiche dans un bandeau en haut : `RECU`, `PREPA`, `PRET`, `SERVI` ou `ANNULE`.
+- s'il y a plusieurs commandes actives, le mur passe en grille 2x2.
+- s'il n'y a aucune commande active, le mur affiche un ecran d'attente simple `SARAH BURGER`.
 
 La page web continue de fonctionner meme si le bridge est ferme, si Bluetooth coupe ou si un panneau n'est pas allume.
 
@@ -221,7 +223,8 @@ Si plusieurs burgers deviennent prets en meme temps :
 - un doublon `ready -> ready` est ignore.
 
 Une commande `received` ou `preparing` reste affichee tant qu'aucun statut plus important n'arrive.
-S'il y a plusieurs commandes actives, elles tournent toutes les `rotation_seconds`.
+S'il y a plusieurs commandes actives, elles sont affichees ensemble en grille 2x2.
+S'il y a plus de quatre commandes actives, le mur fait defiler les pages toutes les `rotation_seconds`.
 Apres une commande `ready`, `served` ou `cancelled`, le panneau revient a l'attente ou au prochain etat disponible.
 
 ## 12. Si le panneau ne se connecte pas

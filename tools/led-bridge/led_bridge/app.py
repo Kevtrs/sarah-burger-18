@@ -13,12 +13,27 @@ from .logging_utils import log
 from .models import STATUS_LOG_LABELS, validate_order_event
 from .panel import PixelPanel
 from .queueing import DisplayQueue
-from .renderer import render_message, render_order
+from .renderer import ACTIVE_STATUSES, render_message, render_order, render_order_grid
 
 
 def display_event(panel: PixelPanel, generated_dir: Path, event) -> None:
     image_path = render_order(event, generated_dir)
     log(f"Commande #{event.number} -> {event.log_label}")
+    panel.send_image(image_path)
+
+
+def display_active_events(panel: PixelPanel, generated_dir: Path, events: dict[str, object], *, page: int = 0) -> None:
+    active_list = list(events.values())
+    if not active_list:
+        panel.send_image(render_message("idle", generated_dir, detail="SARAH"))
+        return
+
+    if len(active_list) == 1:
+        display_event(panel, generated_dir, active_list[0])
+        return
+
+    image_path = render_order_grid(active_list, generated_dir, page=page)
+    log(f"Affichage grille commandes actives ({len(active_list)})")
     panel.send_image(image_path)
 
 
@@ -47,7 +62,7 @@ def run_worker(config, queue: DisplayQueue, panel: PixelPanel, stop_event: threa
 
     idle_sent = False
     active_events = {}
-    active_index = 0
+    active_page = 0
     last_rotation = time.monotonic()
     pending_event = None
     while not stop_event.is_set():
@@ -55,11 +70,11 @@ def run_worker(config, queue: DisplayQueue, panel: PixelPanel, stop_event: threa
         pending_event = None
         if event is None:
             if active_events:
-                active_list = sorted(active_events.values(), key=lambda item: (item.status != "preparing", item.number))
-                if len(active_list) > 1 and time.monotonic() - last_rotation >= config.panel.rotation_seconds:
-                    active_index = (active_index + 1) % len(active_list)
+                if len(active_events) > 4 and time.monotonic() - last_rotation >= config.panel.rotation_seconds:
+                    page_count = (len(active_events) + 3) // 4
+                    active_page = (active_page + 1) % page_count
                     try:
-                        display_event(panel, config.generated_dir, active_list[active_index])
+                        display_active_events(panel, config.generated_dir, active_events, page=active_page)
                     except Exception as exc:
                         log(f"Erreur rotation panneau: {exc}")
                     last_rotation = time.monotonic()
@@ -75,14 +90,13 @@ def run_worker(config, queue: DisplayQueue, panel: PixelPanel, stop_event: threa
 
         idle_sent = False
         try:
-            display_event(panel, config.generated_dir, event)
-            if event.status in {"received", "preparing"}:
+            if event.status in ACTIVE_STATUSES:
                 active_events[event.order_id] = event
-                active_index = 0
+                active_page = 0
+                display_active_events(panel, config.generated_dir, active_events, page=active_page)
             else:
                 active_events.pop(event.order_id, None)
-                if active_events:
-                    active_index %= len(active_events)
+                display_event(panel, config.generated_dir, event)
             last_rotation = time.monotonic()
         except Exception as exc:
             log(f"Erreur panneau: {exc}")
@@ -93,6 +107,11 @@ def run_worker(config, queue: DisplayQueue, panel: PixelPanel, stop_event: threa
 
         delay = config.panel.ready_display_seconds if event.status == "ready" else config.panel.status_display_seconds
         pending_event = wait_for_next_event(queue, stop_event, delay)
+        if pending_event is None and event.status not in ACTIVE_STATUSES and active_events and not stop_event.is_set():
+            try:
+                display_active_events(panel, config.generated_dir, active_events, page=active_page)
+            except Exception as exc:
+                log(f"Erreur retour commandes actives: {exc}")
 
 
 def create_display_controller(config, *, dry_run: bool = False):

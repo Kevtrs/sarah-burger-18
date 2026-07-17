@@ -5,7 +5,7 @@ from collections import deque
 
 from .models import OrderEvent
 
-STATUS_PRIORITY = ("preparing", "received", "served", "cancelled")
+STATUS_PRIORITY = ("preparing", "ready", "received", "served", "cancelled")
 
 
 class DisplayQueue:
