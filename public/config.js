@@ -3,6 +3,8 @@ window.SARAH_BURGER_CONFIG = {
   eventName: "18 ans de Sarah",
   firstOrderNumber: 18,
   repositoryName: "",
+  publicSiteUrl: "",
+  vapidKey: "",
   firebaseConfig: {
     apiKey: "",
     authDomain: "",

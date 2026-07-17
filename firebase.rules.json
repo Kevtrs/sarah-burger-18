@@ -51,7 +51,7 @@
           ".indexOn": ["number", "status", "guestUid", "createdAtMs"],
           "$orderId": {
             ".read": "auth != null && (!data.exists() || root.child('kitchenUsers').child(auth.uid).val() == true || data.child('guestUid').val() == auth.uid)",
-            ".write": "auth != null && ((!data.exists() && newData.exists() && root.child('sessions').child($sessionId).child('meta').child('archived').val() != true && newData.child('id').val() == $orderId && newData.child('clientRequestId').val() == $orderId && newData.child('sessionId').val() == $sessionId && newData.child('guestUid').val() == auth.uid && newData.child('status').val() == 'received') || (data.exists() && newData.exists() && root.child('kitchenUsers').child(auth.uid).val() == true && newData.child('id').val() == data.child('id').val() && newData.child('clientRequestId').val() == data.child('clientRequestId').val() && newData.child('sessionId').val() == data.child('sessionId').val() && newData.child('guestUid').val() == data.child('guestUid').val() && newData.child('number').val() == data.child('number').val() && newData.child('guestName').val() == data.child('guestName').val() && newData.child('sauce').val() == data.child('sauce').val() && newData.child('toppings').val() == data.child('toppings').val() && newData.child('createdAtMs').val() == data.child('createdAtMs').val()))",
+            ".write": "auth != null && ((!data.exists() && newData.exists() && root.child('sessions').child($sessionId).child('meta').child('archived').val() != true && newData.child('id').val() == $orderId && newData.child('clientRequestId').val() == $orderId && newData.child('sessionId').val() == $sessionId && newData.child('guestUid').val() == auth.uid && newData.child('status').val() == 'received') || (data.exists() && newData.exists() && root.child('kitchenUsers').child(auth.uid).val() == true && newData.child('id').val() == data.child('id').val() && newData.child('clientRequestId').val() == data.child('clientRequestId').val() && newData.child('sessionId').val() == data.child('sessionId').val() && newData.child('guestUid').val() == data.child('guestUid').val() && newData.child('number').val() == data.child('number').val() && newData.child('guestName').val() == data.child('guestName').val() && newData.child('sauce').val() == data.child('sauce').val() && newData.child('toppings/pickles').val() == data.child('toppings/pickles').val() && newData.child('toppings/jalapenos').val() == data.child('toppings/jalapenos').val() && newData.child('toppings/onions').val() == data.child('toppings/onions').val() && newData.child('createdAtMs').val() == data.child('createdAtMs').val()))",
             ".validate": "newData.hasChildren(['id', 'sessionId', 'clientRequestId', 'guestUid', 'number', 'guestName', 'sauce', 'status', 'createdAtMs', 'updatedAtMs'])",
             "id": {
               ".validate": "newData.isString() && newData.val() == $orderId && newData.val().length >= 8 && newData.val().length <= 80"
@@ -72,7 +72,7 @@
               ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 32"
             },
             "toppings": {
-              ".validate": "newData.childrenCount() <= 3",
+              ".validate": "newData.hasChildren()",
               "pickles": {
                 ".validate": "newData.isBoolean() && newData.val() == true"
               },
@@ -102,6 +102,65 @@
               ".validate": false
             }
           }
+        },
+        "pushSubscriptions": {
+          ".read": false,
+          ".write": false,
+          "$orderId": {
+            ".read": false,
+            ".write": false,
+            "$subscriptionId": {
+              ".read": "auth != null && data.exists() && data.child('ownerUid').val() == auth.uid",
+              ".write": "auth != null && root.child('sessions').child($sessionId).child('orders').child($orderId).child('guestUid').val() == auth.uid && newData.exists() && newData.child('ownerUid').val() == auth.uid && newData.child('orderId').val() == $orderId && (!data.exists() || (data.child('ownerUid').val() == auth.uid && newData.child('ownerUid').val() == data.child('ownerUid').val() && newData.child('orderId').val() == data.child('orderId').val() && newData.child('createdAtMs').val() == data.child('createdAtMs').val()))",
+              ".validate": "newData.hasChildren(['token', 'orderId', 'orderNumber', 'ownerUid', 'createdAtMs', 'updatedAtMs', 'platform', 'enabled']) && newData.numChildren() <= 14",
+              "token": {
+                ".validate": "newData.isString() && newData.val().length >= 20 && newData.val().length <= 4096"
+              },
+              "orderId": {
+                ".validate": "newData.isString() && newData.val() == $orderId"
+              },
+              "orderNumber": {
+                ".validate": "newData.isNumber() && newData.val() >= 18"
+              },
+              "ownerUid": {
+                ".validate": "newData.isString() && newData.val() == auth.uid"
+              },
+              "createdAtMs": {
+                ".validate": "newData.isNumber()"
+              },
+              "updatedAtMs": {
+                ".validate": "newData.isNumber()"
+              },
+              "platform": {
+                ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 32"
+              },
+              "enabled": {
+                ".validate": "newData.isBoolean()"
+              },
+              "notificationSent": {
+                ".validate": "data.exists() && newData.val() == data.val()"
+              },
+              "notifiedAtMs": {
+                ".validate": "data.exists() && newData.val() == data.val()"
+              },
+              "lastSentAtMs": {
+                ".validate": "data.exists() && newData.val() == data.val()"
+              },
+              "disabledAtMs": {
+                ".validate": "data.exists() && newData.val() == data.val()"
+              },
+              "lastError": {
+                ".validate": "data.exists() && newData.val() == data.val()"
+              },
+              "$other": {
+                ".validate": false
+              }
+            }
+          }
+        },
+        "readyNotifications": {
+          ".read": false,
+          ".write": false
         }
       }
     }

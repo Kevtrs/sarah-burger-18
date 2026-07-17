@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePushNotifications } from "./usePushNotifications";
 
 const STORAGE_KEY = "sarah-burger-ready-alert-v1";
 const READY_SOUND_URL = `${import.meta.env.BASE_URL}audio/ready-alert.wav`;
@@ -24,6 +25,8 @@ function readStoredAlert() {
       notificationsEnabled: parsed.notificationsEnabled === true,
       number: Number(parsed.number || 0),
       orderId: parsed.orderId,
+      pushEnabled: parsed.pushEnabled === true,
+      pushSubscriptionId: typeof parsed.pushSubscriptionId === "string" ? parsed.pushSubscriptionId : "",
       readyNotified: parsed.readyNotified === true,
       watchEnabled: parsed.watchEnabled === true,
     };
@@ -95,8 +98,10 @@ export function useReadyOrderAlert(store) {
   const [message, setMessage] = useState("");
   const [readyAnnounced, setReadyAnnounced] = useState(() => trackedOrder?.readyNotified === true);
   const audioRef = useRef(null);
+  const fireReadyAlertRef = useRef(null);
   const previousStatusRef = useRef(trackedOrder?.lastStatus || "");
   const notifiedOrderRef = useRef(trackedOrder?.readyNotified ? trackedOrder.orderId : "");
+  const trackedOrderRef = useRef(trackedOrder);
   const isIosDevice = useMemo(isAppleTouchDevice, []);
 
   const updateStoredAlert = useCallback((updater) => {
@@ -107,6 +112,14 @@ export function useReadyOrderAlert(store) {
       return next;
     });
   }, []);
+
+  const push = usePushNotifications({
+    onReadyMessage: ({ data }) => {
+      const current = trackedOrderRef.current;
+      if (!data?.orderId || data.orderId !== current?.orderId) return;
+      void fireReadyAlertRef.current?.({ source: "push" });
+    },
+  });
 
   const trackOrder = useCallback(
     (order) => {
@@ -121,6 +134,8 @@ export function useReadyOrderAlert(store) {
         notificationsEnabled: sameOrder ? existing?.notificationsEnabled === true : false,
         number: Number(order.number || existing?.number || 0),
         orderId: order.id,
+        pushEnabled: sameOrder ? existing?.pushEnabled === true : false,
+        pushSubscriptionId: sameOrder ? existing?.pushSubscriptionId || "" : "",
         readyNotified: sameOrder ? existing?.readyNotified === true : false,
         watchEnabled: sameOrder ? existing?.watchEnabled === true : false,
       };
@@ -142,62 +157,28 @@ export function useReadyOrderAlert(store) {
     updateStoredAlert(null);
   }, [updateStoredAlert]);
 
-  const enableAlerts = useCallback(async () => {
-    if (!trackedOrder?.orderId) return;
+  const markReadyFromNotificationClick = useCallback(() => {
+    const current = trackedOrderRef.current;
+    if (!current?.orderId) return;
 
-    await unlockAudio(audioRef);
-
-    let nextPermission = getNotificationPermission();
-    if ("Notification" in window && nextPermission === "default") {
-      nextPermission = await window.Notification.requestPermission();
-    }
-
-    const notificationsEnabled = nextPermission === "granted";
-    setPermission(nextPermission);
-    updateStoredAlert((current) => {
-      if (!current?.orderId) return current;
-      return {
-        ...current,
-        notificationPermission: nextPermission,
-        notificationsEnabled,
-        watchEnabled: true,
-      };
+    notifiedOrderRef.current = current.orderId;
+    setCurrentStatus("ready");
+    setReadyAnnounced(true);
+    setMessage("Ta commande est prête !");
+    updateStoredAlert((stored) => {
+      if (!stored?.orderId) return stored;
+      return { ...stored, lastStatus: "ready", readyNotified: true };
     });
-
-    setMessage(
-      notificationsEnabled
-        ? "Alerte activée. On te prévient dès que la commande passe prête."
-        : "Garde cette page ouverte pour être averti.",
-    );
-  }, [trackedOrder?.orderId, updateStoredAlert]);
+  }, [updateStoredAlert]);
 
   const fireReadyAlert = useCallback(
     async ({ test = false } = {}) => {
       if (!trackedOrder?.orderId) return;
       if (!test && notifiedOrderRef.current === trackedOrder.orderId) return;
 
-      const numberLabel = trackedOrder.number ? `#${trackedOrder.number}` : "";
-      const body = `Commande ${numberLabel} — viens la récupérer au stand Sarah Burger.`;
-
-      if (
-        trackedOrder.notificationsEnabled &&
-        getNotificationPermission() === "granted" &&
-        typeof window !== "undefined" &&
-        "Notification" in window
-      ) {
-        try {
-          new window.Notification("Ton burger est prêt 🍔", {
-            body,
-            tag: `sarah-burger-ready-${trackedOrder.orderId}`,
-            renotify: false,
-          });
-        } catch {
-          // System notifications are best-effort; in-app alert stays visible.
-        }
-      }
-
       if (!test) {
         notifiedOrderRef.current = trackedOrder.orderId;
+        setCurrentStatus("ready");
         setReadyAnnounced(true);
         updateStoredAlert((current) => {
           if (!current?.orderId) return current;
@@ -218,6 +199,87 @@ export function useReadyOrderAlert(store) {
     },
     [trackedOrder, updateStoredAlert],
   );
+
+  useEffect(() => {
+    trackedOrderRef.current = trackedOrder;
+  }, [trackedOrder]);
+
+  useEffect(() => {
+    fireReadyAlertRef.current = fireReadyAlert;
+  }, [fireReadyAlert]);
+
+  const enableAlerts = useCallback(async () => {
+    if (!trackedOrder?.orderId) return;
+
+    await unlockAudio(audioRef);
+
+    let nextPermission = getNotificationPermission();
+    let notificationsEnabled = false;
+    let pushSubscriptionId = "";
+    let nextMessage = "Garde cette page ouverte pour être averti.";
+
+    try {
+      const result = await push.enableForOrder({
+        order: {
+          id: trackedOrder.orderId,
+          number: trackedOrder.number,
+        },
+        saveSubscription: store.savePushSubscription,
+      });
+
+      notificationsEnabled = result.enabled === true;
+      pushSubscriptionId = result.subscriptionId || "";
+      nextPermission = result.permission || getNotificationPermission();
+      nextMessage = notificationsEnabled
+        ? "Alerte push activée. Tu peux quitter la page si ton navigateur l'autorise."
+        : result.reason || push.message || nextMessage;
+    } catch (error) {
+      console.error("PUSH ENABLE ERROR", error);
+      nextPermission = getNotificationPermission();
+      nextMessage = error.message || nextMessage;
+    }
+
+    setPermission(nextPermission);
+    updateStoredAlert((current) => {
+      if (!current?.orderId) return current;
+      return {
+        ...current,
+        notificationPermission: nextPermission,
+        notificationsEnabled,
+        pushEnabled: notificationsEnabled,
+        pushSubscriptionId,
+        watchEnabled: true,
+      };
+    });
+
+    setMessage(nextMessage);
+  }, [push, store.savePushSubscription, trackedOrder, updateStoredAlert]);
+
+  useEffect(() => {
+    if (!trackedOrder?.orderId || typeof window === "undefined") return;
+
+    const url = new URL(window.location.href);
+    const clickedOrderId = url.searchParams.get("readyOrder");
+    if (clickedOrderId !== trackedOrder.orderId) return;
+
+    markReadyFromNotificationClick();
+    url.searchParams.delete("readyOrder");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [markReadyFromNotificationClick, trackedOrder?.orderId]);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.serviceWorker) return undefined;
+
+    const handleMessage = (event) => {
+      const data = event.data || {};
+      const current = trackedOrderRef.current;
+      if (data.type !== "order-ready-notification-click" || data.orderId !== current?.orderId) return;
+      markReadyFromNotificationClick();
+    };
+
+    navigator.serviceWorker.addEventListener("message", handleMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", handleMessage);
+  }, [markReadyFromNotificationClick]);
 
   useEffect(() => {
     if (!trackedOrder?.orderId || !store.subscribeOrderStatus) return undefined;
@@ -243,7 +305,7 @@ export function useReadyOrderAlert(store) {
           !trackedOrder.readyNotified &&
           notifiedOrderRef.current !== trackedOrder.orderId
         ) {
-          void fireReadyAlert();
+          void fireReadyAlert({ source: "status-listener" });
         }
       },
       () => {
@@ -258,10 +320,16 @@ export function useReadyOrderAlert(store) {
     currentStatus,
     enableAlerts,
     fireReadyAlert,
-    isIosDevice,
+    isIosDevice: push.isIosDevice || isIosDevice,
+    isIosStandalone: push.isStandalone,
     message,
-    notificationSupported: permission !== "unsupported",
+    notificationSupported: push.notificationSupported || permission !== "unsupported",
     permission,
+    pushCanRequest: push.canRequest,
+    pushEnvironment: push.environment,
+    pushIsRegistering: push.isRegistering,
+    pushMessage: push.message,
+    pushSupported: push.supported,
     readyAnnounced,
     trackOrder,
     trackedOrder,

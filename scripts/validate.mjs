@@ -276,21 +276,25 @@ async function run() {
   };
 
   await page.locator(".ready-alert-button").click();
-  await page.locator(".ready-alert-state", { hasText: "Alerte activée" }).waitFor();
+  await page.locator(".ready-alert-state", { hasText: "Alerte dans cette page" }).waitFor();
 
   const readyPermission = await page.evaluate(() => ({
     notificationRequests: window.__notificationRequests,
     readyAlertSoundPlays: window.__readyAlertSoundPlays,
     stored: JSON.parse(window.localStorage.getItem("sarah-burger-ready-alert-v1")),
   }));
-  if (readyPermission.notificationRequests !== 1) {
-    throw new Error("Ready notification permission was not requested exactly once.");
+  if (readyPermission.notificationRequests !== 0) {
+    throw new Error("Ready notification permission was requested without push config.");
   }
   if (readyPermission.readyAlertSoundPlays !== 0) {
     throw new Error("Ready alert sound played while only unlocking audio.");
   }
-  if (!readyPermission.stored?.orderId || readyPermission.stored.notificationsEnabled !== true) {
-    throw new Error("Ready alert preference/order was not stored after permission grant.");
+  if (
+    !readyPermission.stored?.orderId ||
+    readyPermission.stored.notificationsEnabled !== false ||
+    readyPermission.stored.watchEnabled !== true
+  ) {
+    throw new Error("Ready alert fallback preference/order was not stored.");
   }
 
   const kitchenPage = await mobileContext.newPage();
@@ -356,9 +360,7 @@ async function run() {
     vibrationCount: window.__readyVibrations.length,
   }));
   if (
-    readyAfterReady.notificationCount !== 1 ||
-    readyAfterReady.notification?.title !== "Ton burger est prêt 🍔" ||
-    !readyAfterReady.notification?.body?.includes(guestConfirmation.number) ||
+    readyAfterReady.notificationCount !== 0 ||
     readyAfterReady.soundPlays !== 1 ||
     readyAfterReady.vibrationCount !== 1 ||
     readyAfterReady.stored?.readyNotified !== true ||
@@ -421,7 +423,7 @@ async function run() {
     stored: JSON.parse(window.localStorage.getItem("sarah-burger-ready-alert-v1")),
   }));
   if (
-    deniedPermission.notificationRequests !== 1 ||
+    deniedPermission.notificationRequests !== 0 ||
     deniedPermission.stored?.notificationsEnabled !== false ||
     deniedPermission.stored?.watchEnabled !== true
   ) {

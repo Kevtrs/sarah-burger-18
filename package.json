@@ -4,8 +4,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
-    "build": "vite build",
+    "dev": "node scripts/generate-messaging-sw.mjs && vite --host 127.0.0.1",
+    "build": "node scripts/generate-messaging-sw.mjs && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "lint": "eslint .",
     "validate": "node scripts/validate.mjs"

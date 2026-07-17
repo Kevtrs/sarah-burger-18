@@ -1,7 +1,5 @@
 import {
   ArrowLeft,
-  Bell,
-  BellRing,
   Check,
   CheckCircle2,
   RotateCcw,
@@ -21,6 +19,7 @@ import {
   toppings,
 } from "../data/menu";
 import { useReadyOrderAlert } from "../hooks/useReadyOrderAlert";
+import { PushNotificationPrompt } from "./PushNotificationPrompt";
 
 const steps = ["identity", "customize", "review", "done"];
 const progressLabels = ["Prénom", "Burger", "Validation"];
@@ -497,7 +496,7 @@ export function GuestOrder({ store }) {
           {order.status === "ready" && (
             <InlineNotice tone="success">Ta commande est prête !</InlineNotice>
           )}
-          <ReadyAlertPanel order={order} readyAlert={readyAlert} />
+          <PushNotificationPrompt order={order} readyAlert={readyAlert} />
         </section>
       )}
 
@@ -672,6 +671,7 @@ function StatusPill({ status }) {
   return <span className={`status-pill status-${current.color}`}>{current.label}</span>;
 }
 
+/*
 function ReadyAlertPanel({ order, readyAlert }) {
   const isReady = order.status === "ready";
   const isFinished = order.status === "served" || order.status === "cancelled";
@@ -721,6 +721,7 @@ function ReadyAlertPanel({ order, readyAlert }) {
   );
 }
 
+*/
 function InlineNotice({ tone, children }) {
   return <p className={`notice notice-${tone}`}>{children}</p>;
 }

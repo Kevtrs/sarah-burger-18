@@ -83,6 +83,32 @@ function normalizeClientRequestId(value) {
   return crypto.randomUUID?.() || `order-${Date.now()}`;
 }
 
+function cleanPlatform(value) {
+  if (typeof value !== "string") return "web";
+  return value.replace(/[^a-z0-9_-]/gi, "").slice(0, 32) || "web";
+}
+
+function bytesToBase64Url(bytes) {
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+async function createPushSubscriptionId(token) {
+  if (typeof token !== "string" || token.length < 20) {
+    throw new Error("Token push invalide.");
+  }
+
+  if (crypto.subtle && typeof TextEncoder !== "undefined") {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+    return `sub_${bytesToBase64Url(new Uint8Array(digest)).slice(0, 48)}`;
+  }
+
+  return `sub_${crypto.randomUUID?.() || Date.now()}`;
+}
+
 function createOrderPayload(input, number, user) {
   const now = Date.now();
   const clientRequestId = normalizeClientRequestId(input.clientRequestId);
@@ -251,6 +277,39 @@ function makeFirebaseOrderStore() {
       });
     },
 
+    async savePushSubscription(order, token, options = {}) {
+      const user = await ensureGuestAuth();
+      const { db } = requireFirebaseRuntime();
+      const orderId = order?.id || order?.orderId;
+      const orderNumber = Number(order?.number || 0);
+      const subscriptionId = await createPushSubscriptionId(token);
+
+      assertSessionKey();
+      assertValidFirebaseKey(orderId, "orderId");
+      assertValidFirebaseKey(subscriptionId, "subscriptionId");
+
+      if (!orderNumber) throw new Error("Numéro de commande introuvable pour l'alerte push.");
+
+      const subscriptionRef = ref(db, sessionPath(`pushSubscriptions/${orderId}/${subscriptionId}`));
+      const existing = await get(subscriptionRef);
+      const payload = {
+        enabled: true,
+        orderId,
+        orderNumber,
+        ownerUid: user.uid,
+        platform: cleanPlatform(options.platform),
+        token,
+        updatedAtMs: serverTimestamp(),
+      };
+
+      if (!existing.exists()) {
+        payload.createdAtMs = serverTimestamp();
+      }
+
+      await update(subscriptionRef, payload);
+      return { orderId, subscriptionId };
+    },
+
     async archiveSession() {
       await archiveFirebaseSession();
     },
@@ -385,6 +444,21 @@ function makeLocalStore() {
           : order,
       );
       writeOrders(orders);
+    },
+
+    async savePushSubscription(order, token, options = {}) {
+      const subscriptionId = await createPushSubscriptionId(token || crypto.randomUUID?.() || String(Date.now()));
+      localStorage.setItem(
+        `sarah-burger:${sessionId}:push:${order.id}`,
+        JSON.stringify({
+          enabled: true,
+          orderId: order.id,
+          orderNumber: order.number,
+          platform: cleanPlatform(options.platform),
+          subscriptionId,
+        }),
+      );
+      return { orderId: order.id, subscriptionId };
     },
 
     async archiveSession() {
