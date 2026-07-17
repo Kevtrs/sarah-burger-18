@@ -100,7 +100,7 @@ def _draw_status_strip(display: VirtualDisplay64, label: str, color: tuple[int, 
         label,
         3,
         _fit_font(label, max_size=11, min_size=8, max_width=56, max_height=10),
-        color,
+        WHITE,
     )
 
 
@@ -137,7 +137,7 @@ def _draw_order_slot(display: VirtualDisplay64, event: OrderEvent, box: tuple[in
     display.draw.rectangle((x1 + 1, y1 + 1, x2 - 2, y1 + 7), fill=_status_dim(color))
 
     status_font = _fit_font(event.led_label, max_size=6, min_size=5, max_width=28, max_height=6)
-    display.draw.text(((x1 + x2) // 2, y1 + 1), event.led_label, font=status_font, fill=color, anchor="ma")
+    display.draw.text(((x1 + x2) // 2, y1 + 1), event.led_label, font=status_font, fill=WHITE, anchor="ma")
 
     name = _short_name(event.guest_name)
     name_font = _fit_font(name, max_size=11, min_size=6, max_width=29, max_height=12)
