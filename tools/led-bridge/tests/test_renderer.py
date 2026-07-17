@@ -7,7 +7,15 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from led_bridge.models import STATUS_LABELS, validate_order_event
-from led_bridge.renderer import choose_number_font, render_message, render_order, render_order_grid, render_rush_summary, text_size
+from led_bridge.renderer import (
+    choose_number_font,
+    render_last_call,
+    render_message,
+    render_order,
+    render_order_grid,
+    render_rush_summary,
+    text_size,
+)
 from led_bridge.virtual_display import VirtualDisplay64
 
 
@@ -83,6 +91,34 @@ class RendererTest(unittest.TestCase):
             with Image.open(path) as image:
                 self.assertEqual(image.size, (64, 64))
                 self.assertIsNotNone(image.getbbox())
+
+    def test_last_call_render(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            event = validate_order_event(
+                {"orderId": "order-39", "number": 39, "guestName": "Kevin", "status": "ready"}
+            )
+            path = render_last_call(event, Path(tmp))
+            with Image.open(path) as image:
+                self.assertEqual(image.size, (64, 64))
+                self.assertIsNotNone(image.getbbox())
+
+    def test_closed_message_render(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = render_message("closed", Path(tmp), high_contrast=True)
+            with Image.open(path) as image:
+                self.assertEqual(image.size, (64, 64))
+                self.assertIsNotNone(image.getbbox())
+                self.assertEqual(image.getpixel((1, 1)), (255, 255, 255))
+
+    def test_high_contrast_order_uses_white_border(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            event = validate_order_event(
+                {"orderId": "order-39", "number": 39, "guestName": "Kevin", "status": "ready"}
+            )
+            path = render_order(event, Path(tmp), high_contrast=True)
+            with Image.open(path) as image:
+                self.assertEqual(image.size, (64, 64))
+                self.assertEqual(image.getpixel((1, 1)), (255, 255, 255))
 
     def test_message_render(self):
         with tempfile.TemporaryDirectory() as tmp:

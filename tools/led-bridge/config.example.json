@@ -1,4 +1,6 @@
 {
+  "stand_open": true,
+  "high_contrast": false,
   "firebase": {
     "database_url": "https://sarah-burger-18-default-rtdb.europe-west1.firebasedatabase.app",
     "service_account_path": "service-account.json",
@@ -7,6 +9,8 @@
   "panel": {
     "ready_display_seconds": 20,
     "status_display_seconds": 3,
+    "terminal_display_seconds": 1,
+    "last_call_seconds": 180,
     "rotation_seconds": 3,
     "reconnect_delay_seconds": 5,
     "brightness": null
@@ -20,7 +24,9 @@
     }
   },
   "behavior": {
-    "queue_existing_ready_on_start": false
+    "queue_existing_ready_on_start": false,
+    "stuck_order_minutes": 15,
+    "stuck_repeat_minutes": 5
   },
   "generated_dir": "generated"
 }

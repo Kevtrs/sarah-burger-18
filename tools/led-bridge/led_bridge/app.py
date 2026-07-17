@@ -13,13 +13,30 @@ from .logging_utils import log
 from .models import OrderEvent, STATUS_LOG_LABELS, validate_order_event
 from .panel import PixelPanel
 from .queueing import DisplayQueue
-from .renderer import ACTIVE_STATUSES, RUSH_THRESHOLD, render_message, render_order, render_order_grid, render_rush_summary
+from .renderer import (
+    ACTIVE_STATUSES,
+    RUSH_THRESHOLD,
+    render_last_call,
+    render_message,
+    render_order,
+    render_order_grid,
+    render_rush_summary,
+)
 
 HEALTH_LOG_SECONDS = 30
+TERMINAL_STATUSES = {"served", "cancelled"}
 
 
-def display_event(panel: PixelPanel, generated_dir: Path, event) -> None:
-    image_path = render_order(event, generated_dir)
+def _config_value(config, key: str, default):
+    return getattr(config, key, default)
+
+
+def _panel_value(config, key: str, default):
+    return getattr(config.panel, key, default)
+
+
+def display_event(panel: PixelPanel, generated_dir: Path, event, *, high_contrast: bool = False) -> None:
+    image_path = render_order(event, generated_dir, high_contrast=high_contrast)
     log(f"Commande #{event.number} -> {event.log_label}")
     panel.send_image(image_path)
 
@@ -45,19 +62,38 @@ def _send_ready_focus(
     generated_dir: Path,
     event: OrderEvent,
     *,
+    high_contrast: bool = False,
+    ready_since: float | None = None,
+    last_call_seconds: float = 180,
     index: int | None = None,
     total: int | None = None,
 ) -> None:
     suffix = f" ({index}/{total})" if index is not None and total else ""
     name = f" {event.guest_name}" if event.guest_name else ""
+    is_last_call = ready_since is not None and time.monotonic() - ready_since >= last_call_seconds
+    if is_last_call:
+        log(f"Dernier appel{suffix}: #{event.number}{name}")
+        panel.send_image(render_last_call(event, generated_dir, high_contrast=high_contrast))
+        return
+
     log(f"A recuperer{suffix}: #{event.number}{name}")
-    panel.send_image(render_order(event, generated_dir))
+    panel.send_image(render_order(event, generated_dir, high_contrast=high_contrast))
 
 
-def display_active_events(panel: PixelPanel, generated_dir: Path, events: dict[str, OrderEvent], *, page: int = 0) -> None:
+def display_active_events(
+    panel: PixelPanel,
+    generated_dir: Path,
+    events: dict[str, OrderEvent],
+    *,
+    page: int = 0,
+    high_contrast: bool = False,
+    status_since: dict[str, float] | None = None,
+    last_call_seconds: float = 180,
+) -> None:
+    status_since = status_since or {}
     active_list = _active_list(events)
     if not active_list:
-        panel.send_image(render_message("idle", generated_dir, detail="SARAH"))
+        panel.send_image(render_message("idle", generated_dir, detail="SARAH", high_contrast=high_contrast))
         return
 
     ready_list = _ready_list(events)
@@ -66,11 +102,21 @@ def display_active_events(panel: PixelPanel, generated_dir: Path, events: dict[s
             cycle_len = len(ready_list) + 1
             slot = page % cycle_len
             if slot < len(ready_list):
-                _send_ready_focus(panel, generated_dir, ready_list[slot], index=slot + 1, total=len(ready_list))
+                event = ready_list[slot]
+                _send_ready_focus(
+                    panel,
+                    generated_dir,
+                    event,
+                    high_contrast=high_contrast,
+                    ready_since=status_since.get(event.order_id),
+                    last_call_seconds=last_call_seconds,
+                    index=slot + 1,
+                    total=len(ready_list),
+                )
                 return
 
         ready_count, preparing_count, received_count = _counts(events)
-        image_path = render_rush_summary(active_list, generated_dir)
+        image_path = render_rush_summary(active_list, generated_dir, high_contrast=high_contrast)
         log(
             "Mode rush: "
             f"{len(active_list)} actives | PRET {ready_count} | PREPA {preparing_count} | RECU {received_count}"
@@ -83,14 +129,24 @@ def display_active_events(panel: PixelPanel, generated_dir: Path, events: dict[s
         cycle_len = len(ready_list) + (1 if overview_needed else 0)
         slot = page % cycle_len
         if slot < len(ready_list):
-            _send_ready_focus(panel, generated_dir, ready_list[slot], index=slot + 1, total=len(ready_list))
+            event = ready_list[slot]
+            _send_ready_focus(
+                panel,
+                generated_dir,
+                event,
+                high_contrast=high_contrast,
+                ready_since=status_since.get(event.order_id),
+                last_call_seconds=last_call_seconds,
+                index=slot + 1,
+                total=len(ready_list),
+            )
             return
 
     if len(active_list) == 1:
-        display_event(panel, generated_dir, active_list[0])
+        display_event(panel, generated_dir, active_list[0], high_contrast=high_contrast)
         return
 
-    image_path = render_order_grid(active_list, generated_dir, page=page)
+    image_path = render_order_grid(active_list, generated_dir, page=page, high_contrast=high_contrast)
     log(f"Affichage grille commandes actives ({len(active_list)})")
     panel.send_image(image_path)
 
@@ -122,6 +178,42 @@ def log_health(panel: PixelPanel, active_events: dict[str, OrderEvent], last_eve
     )
 
 
+def log_stuck_orders(
+    active_events: dict[str, OrderEvent],
+    status_since: dict[str, float],
+    stuck_logged_at: dict[str, float],
+    *,
+    stuck_order_minutes: float,
+    stuck_repeat_minutes: float,
+) -> None:
+    if stuck_order_minutes <= 0:
+        return
+
+    now = time.monotonic()
+    threshold = stuck_order_minutes * 60
+    repeat = max(60, stuck_repeat_minutes * 60)
+    for order_id, event in active_events.items():
+        if event.status not in {"received", "preparing"}:
+            continue
+
+        started_at = status_since.get(order_id, now)
+        age = now - started_at
+        if age < threshold:
+            continue
+
+        last_log = stuck_logged_at.get(order_id, 0)
+        if now - last_log < repeat:
+            continue
+
+        log(f"Commande #{event.number} bloquee depuis {int(age // 60)} min ({event.led_label}).")
+        stuck_logged_at[order_id] = now
+
+    active_ids = set(active_events)
+    for order_id in list(stuck_logged_at):
+        if order_id not in active_ids:
+            stuck_logged_at.pop(order_id, None)
+
+
 def should_rotate_active_display(active_events: dict[str, OrderEvent]) -> bool:
     if len(active_events) >= RUSH_THRESHOLD:
         return True
@@ -146,13 +238,26 @@ def wait_for_next_event(queue: DisplayQueue, stop_event: threading.Event, delay:
 
 
 def run_worker(config, queue: DisplayQueue, panel: PixelPanel, stop_event: threading.Event) -> None:
+    high_contrast = _config_value(config, "high_contrast", False)
+    if not _config_value(config, "stand_open", True):
+        try:
+            panel.send_image(render_message("closed", config.generated_dir, high_contrast=high_contrast))
+            log("Stand ferme: affichage STAND FERME actif.")
+        except Exception as exc:
+            log(f"Affichage stand ferme impossible: {exc}")
+        while not stop_event.wait(1):
+            pass
+        return
+
     try:
-        panel.send_image(render_message("startup", config.generated_dir, detail="START"))
+        panel.send_image(render_message("startup", config.generated_dir, detail="START", high_contrast=high_contrast))
     except Exception as exc:
         log(f"Demarrage panneau impossible: {exc}")
 
     idle_sent = False
-    active_events = {}
+    active_events: dict[str, OrderEvent] = {}
+    status_since: dict[str, float] = {}
+    stuck_logged_at: dict[str, float] = {}
     active_page = 0
     last_rotation = time.monotonic()
     last_health = 0.0
@@ -165,13 +270,28 @@ def run_worker(config, queue: DisplayQueue, panel: PixelPanel, stop_event: threa
         if event is None:
             if time.monotonic() - last_health >= HEALTH_LOG_SECONDS:
                 log_health(panel, active_events, last_event, last_event_at)
+                log_stuck_orders(
+                    active_events,
+                    status_since,
+                    stuck_logged_at,
+                    stuck_order_minutes=_config_value(config, "stuck_order_minutes", 15),
+                    stuck_repeat_minutes=_config_value(config, "stuck_repeat_minutes", 5),
+                )
                 last_health = time.monotonic()
 
             if active_events:
                 if should_rotate_active_display(active_events) and time.monotonic() - last_rotation >= config.panel.rotation_seconds:
                     active_page += 1
                     try:
-                        display_active_events(panel, config.generated_dir, active_events, page=active_page)
+                        display_active_events(
+                            panel,
+                            config.generated_dir,
+                            active_events,
+                            page=active_page,
+                            high_contrast=high_contrast,
+                            status_since=status_since,
+                            last_call_seconds=_panel_value(config, "last_call_seconds", 180),
+                        )
                     except Exception as exc:
                         log(f"Erreur rotation panneau: {exc}")
                     last_rotation = time.monotonic()
@@ -179,7 +299,7 @@ def run_worker(config, queue: DisplayQueue, panel: PixelPanel, stop_event: threa
             if idle_sent:
                 continue
             try:
-                panel.send_image(render_message("idle", config.generated_dir, detail="STAND"))
+                panel.send_image(render_message("idle", config.generated_dir, detail="STAND", high_contrast=high_contrast))
                 idle_sent = True
             except Exception as exc:
                 log(f"Affichage attente impossible: {exc}")
@@ -190,30 +310,64 @@ def run_worker(config, queue: DisplayQueue, panel: PixelPanel, stop_event: threa
         last_event_at = time.monotonic()
         try:
             if event.status in ACTIVE_STATUSES:
+                previous = active_events.get(event.order_id)
+                if previous is None or previous.status != event.status:
+                    status_since[event.order_id] = time.monotonic()
+                    stuck_logged_at.pop(event.order_id, None)
                 active_events[event.order_id] = event
                 active_page = 0
                 if event.status == "ready":
-                    _send_ready_focus(panel, config.generated_dir, event)
+                    _send_ready_focus(
+                        panel,
+                        config.generated_dir,
+                        event,
+                        high_contrast=high_contrast,
+                        ready_since=status_since.get(event.order_id),
+                        last_call_seconds=_panel_value(config, "last_call_seconds", 180),
+                    )
                 else:
-                    display_active_events(panel, config.generated_dir, active_events, page=active_page)
+                    display_active_events(
+                        panel,
+                        config.generated_dir,
+                        active_events,
+                        page=active_page,
+                        high_contrast=high_contrast,
+                        status_since=status_since,
+                        last_call_seconds=_panel_value(config, "last_call_seconds", 180),
+                    )
             else:
                 active_events.pop(event.order_id, None)
-                display_event(panel, config.generated_dir, event)
+                status_since.pop(event.order_id, None)
+                stuck_logged_at.pop(event.order_id, None)
+                display_event(panel, config.generated_dir, event, high_contrast=high_contrast)
             last_rotation = time.monotonic()
         except Exception as exc:
             log(f"Erreur panneau: {exc}")
             try:
-                panel.send_image(render_message("bluetooth_error", config.generated_dir, detail="ERR"))
+                panel.send_image(render_message("bluetooth_error", config.generated_dir, detail="ERR", high_contrast=high_contrast))
             except Exception:
                 pass
 
-        delay = config.panel.ready_display_seconds if event.status == "ready" else config.panel.status_display_seconds
+        if event.status == "ready":
+            delay = config.panel.ready_display_seconds
+        elif event.status in TERMINAL_STATUSES:
+            delay = _panel_value(config, "terminal_display_seconds", 1)
+        else:
+            delay = config.panel.status_display_seconds
         pending_event = wait_for_next_event(queue, stop_event, delay)
         if pending_event is None and active_events and not stop_event.is_set():
             try:
                 if event.status == "ready" or event.status not in ACTIVE_STATUSES:
                     active_page += 1
-                display_active_events(panel, config.generated_dir, active_events, page=active_page)
+                display_active_events(
+                    panel,
+                    config.generated_dir,
+                    active_events,
+                    page=active_page,
+                    high_contrast=high_contrast,
+                    status_since=status_since,
+                    last_call_seconds=_panel_value(config, "last_call_seconds", 180),
+                )
                 last_rotation = time.monotonic()
             except Exception as exc:
                 log(f"Erreur retour commandes actives: {exc}")
@@ -254,6 +408,12 @@ def run(config_path: Path, *, dry_run: bool = False) -> None:
     worker = threading.Thread(target=run_worker, args=(config, queue, panel, stop_event), daemon=True)
     worker.start()
 
+    if not config.stand_open:
+        log("Stand ferme: Firebase n'est pas ecoutee. Repasse stand_open a true puis relance pour rouvrir.")
+        while not stop_event.wait(1):
+            pass
+        return
+
     watcher = FirebaseOrdersWatcher(config.firebase)
     log("Sarah Burger LED Bridge")
     log(f"Session Firebase: {config.firebase.session_id}")
@@ -271,7 +431,7 @@ def run_test(config_path: Path, number: int, status: str, *, dry_run: bool = Fal
         {"orderId": "test-local", "number": number, "guestName": "Test", "status": status}
     )
     panel = create_display_controller(config, dry_run=dry_run)
-    display_event(panel, config.generated_dir, event)
+    display_event(panel, config.generated_dir, event, high_contrast=config.high_contrast)
     panel.close()
 
 
@@ -282,7 +442,7 @@ def render_samples(config_path: Path) -> None:
             event = validate_order_event(
                 {"orderId": f"sample-{number}-{status}", "number": number, "guestName": "", "status": status}
             )
-            path = render_order(event, config.generated_dir)
+            path = render_order(event, config.generated_dir, high_contrast=config.high_contrast)
             log(f"Rendu test: {path}")
 
 

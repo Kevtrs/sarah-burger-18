@@ -48,6 +48,7 @@ class LedWallController:
             panel.close()
 
     def send_image(self, image_path: Path) -> None:
+        failures: list[str] = []
         with Image.open(image_path) as image:
             image = image.convert("RGB")
             if image.size != (64, 64):
@@ -56,5 +57,20 @@ class LedWallController:
             for name, box in PANEL_BOXES.items():
                 crop_path = self.output_dir / f"{name}.png"
                 image.crop(box).save(crop_path)
-                log(f"Envoi panneau {PANEL_LABELS[name]}")
-                self.panels[name].send_image(crop_path)
+                label = PANEL_LABELS[name]
+                try:
+                    log(f"Envoi panneau {label}")
+                    self.panels[name].send_image(crop_path)
+                except Exception as exc:
+                    failures.append(f"{label}: {exc}")
+                    log(f"Panneau {label} non mis a jour: {exc}")
+
+        if not failures:
+            return
+
+        success_count = len(PANEL_BOXES) - len(failures)
+        if success_count > 0:
+            log(f"Mur LED partiel: {success_count}/{len(PANEL_BOXES)} panneaux mis a jour.")
+            return
+
+        raise RuntimeError(f"Aucun panneau mis a jour: {' | '.join(failures)}")

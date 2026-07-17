@@ -108,6 +108,8 @@ Verifier :
 
 ```json
 {
+  "stand_open": true,
+  "high_contrast": false,
   "firebase": {
     "database_url": "https://sarah-burger-18-default-rtdb.europe-west1.firebasedatabase.app",
     "service_account_path": "service-account.json",
@@ -116,6 +118,8 @@ Verifier :
   "panel": {
     "ready_display_seconds": 20,
     "status_display_seconds": 3,
+    "terminal_display_seconds": 1,
+    "last_call_seconds": 180,
     "rotation_seconds": 3,
     "reconnect_delay_seconds": 5,
     "brightness": null
@@ -129,14 +133,21 @@ Verifier :
     }
   },
   "behavior": {
-    "queue_existing_ready_on_start": false
+    "queue_existing_ready_on_start": false,
+    "stuck_order_minutes": 15,
+    "stuck_repeat_minutes": 5
   },
   "generated_dir": "generated"
 }
 ```
 
+`stand_open: false` affiche `STAND FERME` et coupe l'ecoute Firebase jusqu'au prochain redemarrage.
+`high_contrast: true` force un rendu noir/blanc avec contours epais.
 `ready_display_seconds` controle la duree d'affichage d'une commande prete.
+`terminal_display_seconds` controle la duree tres courte des ecrans `SERVI` et `ANNULE`.
+`last_call_seconds` controle le passage de `PRET` a `DERNIER APPEL`.
 `rotation_seconds` controle la rotation quand plusieurs commandes actives sont affichees.
+`stuck_order_minutes` declenche une alerte console si une commande reste bloquee en `RECU` ou `PREPA`.
 
 ## 7. Disposition des panneaux
 
@@ -228,7 +239,8 @@ Si plusieurs burgers deviennent prets en meme temps :
 Une commande `received` ou `preparing` reste affichee tant qu'aucun statut plus important n'arrive.
 S'il y a plusieurs commandes actives, elles sont affichees ensemble en grille 2x2.
 S'il y a plus de quatre commandes actives, le mur affiche un resume `RUSH` avec le nombre de commandes `PRET`, `PREPA` et `RECU`.
-Apres une commande `ready`, `served` ou `cancelled`, le panneau revient a l'attente ou au prochain etat disponible.
+Si une commande reste `PRET` plus longtemps que `last_call_seconds`, elle passe en mode `DERNIER APPEL`.
+Apres une commande `served` ou `cancelled`, le panneau affiche une confirmation tres courte puis revient a l'attente ou au prochain etat disponible.
 
 ## 12. Logs sante
 
@@ -244,8 +256,27 @@ Ca permet de verifier rapidement :
 - si les quatre panneaux sont connectes ;
 - combien de commandes sont encore actives ;
 - quel est le dernier changement recu.
+- si une commande est bloquee en `RECU` ou `PREPA` depuis trop longtemps.
 
-## 13. Si le panneau ne se connecte pas
+## 13. Modes manuels utiles
+
+Pour fermer le stand sans toucher au code, ouvrir `config.json`, mettre :
+
+```json
+"stand_open": false
+```
+
+Puis relancer `LANCER.bat`. Le mur affiche `STAND FERME` et n'ecoute plus Firebase.
+
+Pour augmenter la lisibilite si les panneaux sont faibles ou en pleine lumiere, mettre :
+
+```json
+"high_contrast": true
+```
+
+Puis relancer `LANCER.bat`. Le mur passe en noir/blanc avec contours epais.
+
+## 14. Si un panneau ne se connecte pas
 
 Verifier :
 
@@ -258,7 +289,9 @@ Verifier :
 
 Si besoin, supprimer l'appairage Bluetooth Windows du panneau, puis le reconnecter.
 
-## 14. Si Firebase ne repond pas
+Si un seul panneau decroche pendant la soiree, le bridge continue d'envoyer l'image aux autres panneaux et affiche dans la console lequel n'a pas ete mis a jour.
+
+## 15. Si Firebase ne repond pas
 
 Verifier :
 
@@ -270,7 +303,7 @@ Verifier :
 
 Ne mets pas les regles Firebase en mode test.
 
-## 15. Si l'image ne change pas
+## 16. Si l'image ne change pas
 
 Verifier :
 
@@ -280,7 +313,7 @@ Verifier :
 4. le panneau n'est pas connecte a iPixel Color ;
 5. les quatre panneaux sont allumes et proches du PC.
 
-## 16. Arreter proprement
+## 17. Arreter proprement
 
 Dans la fenetre du bridge :
 
@@ -290,7 +323,7 @@ Ctrl + C
 
 Puis attendre la fermeture. Tu peux aussi fermer la fenetre si necessaire.
 
-## 17. Lancement automatique Windows
+## 18. Lancement automatique Windows
 
 Option simple :
 
@@ -315,6 +348,11 @@ Avant la soiree, verifie quand meme que le bridge se lance bien et que le pannea
 [ ] LANCER.bat affiche Firebase connecte
 [ ] Une fausse commande passe de recue a prete
 [ ] Le numero apparait sur le mur LED
+[ ] Une commande prete reste assez longtemps pour tester DERNIER APPEL
+[ ] Une commande servie ou annulee disparait vite
+[ ] Si un panneau est eteint, les autres continuent et la console indique le panneau manquant
+[ ] `stand_open: false` affiche STAND FERME apres redemarrage
+[ ] `high_contrast: true` affiche un rendu noir/blanc apres redemarrage
 [ ] Le programme redemarre correctement
 [ ] La page #stand fonctionne meme si le bridge est ferme
 ```

@@ -19,6 +19,8 @@ class PanelConfig:
     wall_panels: dict[str, str]
     ready_display_seconds: float
     status_display_seconds: float
+    terminal_display_seconds: float
+    last_call_seconds: float
     rotation_seconds: float
     reconnect_delay_seconds: float
     brightness: int | None
@@ -30,6 +32,10 @@ class BridgeConfig:
     panel: PanelConfig
     generated_dir: Path
     queue_existing_ready_on_start: bool
+    stand_open: bool
+    high_contrast: bool
+    stuck_order_minutes: float
+    stuck_repeat_minutes: float
 
 
 def _required_text(data: dict[str, Any], key: str) -> str:
@@ -46,6 +52,20 @@ def _optional_text(data: dict[str, Any], key: str) -> str | None:
     if not isinstance(value, str) or not value.strip():
         return None
     return value.strip()
+
+
+def _bool_value(value: Any, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "oui", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "non", "off"}:
+            return False
+    return bool(value)
 
 
 def _load_wall_panels(raw: dict[str, Any]) -> dict[str, str]:
@@ -70,7 +90,7 @@ def load_config(path: Path) -> BridgeConfig:
             f"{path.name} est absent. Copie config.example.json en config.json puis remplis les champs."
         )
 
-    raw = json.loads(path.read_text(encoding="utf-8"))
+    raw = json.loads(path.read_text(encoding="utf-8-sig"))
     root = path.resolve().parent
     firebase = raw.get("firebase") or {}
     panel = raw.get("panel") or {}
@@ -105,10 +125,16 @@ def load_config(path: Path) -> BridgeConfig:
             wall_panels=wall_panels,
             ready_display_seconds=float(panel.get("ready_display_seconds", 20)),
             status_display_seconds=float(panel.get("status_display_seconds", 3)),
+            terminal_display_seconds=float(panel.get("terminal_display_seconds", 1)),
+            last_call_seconds=float(panel.get("last_call_seconds", 180)),
             rotation_seconds=float(panel.get("rotation_seconds", 3)),
             reconnect_delay_seconds=float(panel.get("reconnect_delay_seconds", 5)),
             brightness=brightness,
         ),
         generated_dir=generated_dir,
         queue_existing_ready_on_start=bool(behavior.get("queue_existing_ready_on_start", False)),
+        stand_open=_bool_value(raw.get("stand_open", behavior.get("stand_open")), True),
+        high_contrast=_bool_value(raw.get("high_contrast", behavior.get("high_contrast")), False),
+        stuck_order_minutes=float(behavior.get("stuck_order_minutes", raw.get("stuck_order_minutes", 15))),
+        stuck_repeat_minutes=float(behavior.get("stuck_repeat_minutes", raw.get("stuck_repeat_minutes", 5))),
     )
