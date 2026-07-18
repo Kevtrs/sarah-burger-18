@@ -101,8 +101,9 @@
 .guest-layout {
   min-height: calc(100svh - 76px);
   min-height: calc(100dvh - 76px);
-  grid-template-rows: auto minmax(0, auto) auto;
+  grid-template-rows: auto minmax(0, auto);
   align-content: start;
+  padding-bottom: calc(92px + env(safe-area-inset-bottom));
 }
 
 .progress {
@@ -684,7 +685,7 @@
 }
 
 .sticky-actions {
-  position: sticky;
+  position: fixed;
   right: 0;
   bottom: 0;
   left: 0;
