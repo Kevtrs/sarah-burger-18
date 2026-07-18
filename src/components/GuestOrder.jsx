@@ -504,9 +504,9 @@ export function GuestOrder({ store }) {
             <h1 id="customize-title">Compose ton burger</h1>
           </div>
 
+          <NachosOption selected={wantsNachos} onToggle={toggleNachos} unavailable={sessionMeta.unavailable} />
           <ToppingsGrid selectedToppings={selectedToppings} onToggle={toggleTopping} unavailable={sessionMeta.unavailable} />
           <SaucesGrid selectedSauces={selectedSauces} onToggle={toggleSauce} unavailable={sessionMeta.unavailable} />
-          <NachosOption selected={wantsNachos} onToggle={toggleNachos} unavailable={sessionMeta.unavailable} />
         </section>
       )}
 
@@ -987,9 +987,9 @@ function AddBurgerModal({ existingNames, unavailable = {}, onCancel, onConfirm }
 
           {error && <InlineNotice tone="error">{error}</InlineNotice>}
 
+          <NachosOption selected={wantsNachos} onToggle={toggleNachos} unavailable={unavailable} />
           <ToppingsGrid selectedToppings={selectedToppings} onToggle={toggleTopping} unavailable={unavailable} />
           <SaucesGrid selectedSauces={selectedSauces} onToggle={toggleSauce} unavailable={unavailable} />
-          <NachosOption selected={wantsNachos} onToggle={toggleNachos} unavailable={unavailable} />
         </div>
 
         <div className="modal-sheet__footer">

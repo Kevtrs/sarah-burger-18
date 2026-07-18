@@ -1750,6 +1750,10 @@ dd {
     grid-column: 1 / -1;
   }
 
+  .sauces-section {
+    grid-column: 1 / -1;
+  }
+
   .sticky-actions {
     width: min(560px, 100%);
     margin-left: auto;
