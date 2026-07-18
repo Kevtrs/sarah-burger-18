@@ -84,12 +84,12 @@ export function GuestOrder({ store }) {
     if (typeof window === "undefined") return false;
     return sessionStorage.getItem(introStorageKey) !== "yes";
   });
+  const [isAddBurgerOpen, setIsAddBurgerOpen] = useState(false);
   const submitTimersRef = useRef([]);
   const clientRequestIdRef = useRef(makeClientRequestId());
   const hasResumedOrderRef = useRef(false);
   const readyAlert = useReadyOrderAlert(store);
 
-  const isExtraBurger = cart.length > 0;
   const trimmedName = guestName.trim();
   const isDuplicateName = useMemo(
     () =>
@@ -170,24 +170,14 @@ export function GuestOrder({ store }) {
 
   function canGoNext() {
     if (step === "identity") return guestName.trim().length > 0;
-    if (step === "customize") {
-      if (isExtraBurger && guestName.trim().length === 0) return false;
-      if (isExtraBurger && isDuplicateName) return false;
-      return selectedSauces.length > 0;
-    }
+    if (step === "customize") return selectedSauces.length > 0;
     return true;
   }
 
   function goNext() {
     setError("");
     if (!canGoNext()) {
-      if (step === "identity" || (step === "customize" && isExtraBurger && !guestName.trim())) {
-        setError("Ajoute un prénom avant de continuer.");
-      } else if (step === "customize" && isExtraBurger && isDuplicateName) {
-        setError(`Il y a déjà un burger pour « ${trimmedName} ». Ajoute une précision (ex: initiale du nom) pour les distinguer au comptoir.`);
-      } else {
-        setError("Choisis une sauce ou Sans sauce.");
-      }
+      setError(step === "identity" ? "Ajoute ton prénom avant de continuer." : "Choisis une sauce ou Sans sauce.");
       return;
     }
     const index = steps.indexOf(step);
@@ -198,13 +188,6 @@ export function GuestOrder({ store }) {
 
   function goBack() {
     setError("");
-
-    if (step === "customize" && isExtraBurger) {
-      withViewTransition(() => flushSync(() => setStep("review")), "customize-to-review");
-      window.scrollTo({ top: 0, behavior: "auto" });
-      return;
-    }
-
     const index = steps.indexOf(step);
     if (index > 0) {
       const previousStep = steps[index - 1];
@@ -213,25 +196,19 @@ export function GuestOrder({ store }) {
     }
   }
 
-  function addAnotherBurger() {
+  function openAddBurgerModal() {
     setError("");
-    const savedClientRequestId = clientRequestIdRef.current;
-    setCart((current) => [
-      ...current,
-      {
-        localId: makeClientRequestId(),
-        clientRequestId: savedClientRequestId,
-        guestName,
-        toppings: selectedToppings,
-        sauces: selectedSauces,
-      },
-    ]);
-    setGuestName("");
-    setSelectedToppings([]);
-    setSelectedSauces([]);
-    clientRequestIdRef.current = makeClientRequestId();
-    withViewTransition(() => flushSync(() => setStep("customize")), "review-to-customize");
-    window.scrollTo({ top: 0, behavior: "auto" });
+    setIsAddBurgerOpen(true);
+  }
+
+  function closeAddBurgerModal() {
+    setIsAddBurgerOpen(false);
+  }
+
+  function confirmAddBurger(draft) {
+    const id = makeClientRequestId();
+    setCart((current) => [...current, { localId: id, clientRequestId: id, ...draft }]);
+    setIsAddBurgerOpen(false);
   }
 
   function removeFromCart(localId) {
@@ -433,123 +410,8 @@ export function GuestOrder({ store }) {
             <h1 id="customize-title">Compose ton burger</h1>
           </div>
 
-          {isExtraBurger && <CartSummary cart={cart} />}
-
-          {isExtraBurger && (
-            <label className="field extra-guest-field">
-              <span>Prénom de cette personne</span>
-              <input
-                value={guestName}
-                maxLength={32}
-                autoComplete="off"
-                placeholder="Ex. Léa"
-                onChange={(event) => setGuestName(event.target.value)}
-              />
-              {isDuplicateName && (
-                <small className="field-warning">
-                  Il y a déjà un burger pour « {trimmedName} » dans cette commande.
-                </small>
-              )}
-            </label>
-          )}
-
-          <div className="choice-section toppings-section">
-            <div className="section-heading">
-              <p className="eyebrow">Ajouts</p>
-              <h2>Tes ajouts</h2>
-            </div>
-            <div className="choice-grid toppings-grid">
-              {toppings.map((item) => {
-                const selected = selectedToppings.includes(item.id);
-                return (
-                  <button
-                    className={`option-card choice-card choice-${item.accent} mascot-${item.id} ${selected ? "selected" : ""}`}
-                    key={item.id}
-                    type="button"
-                    data-option={item.id}
-                    data-selected={selected}
-                    onClick={() => toggleTopping(item.id)}
-                    aria-pressed={selected}
-                  >
-                    <span className="option-card__shadow" aria-hidden="true" />
-                    <span className="option-card__accent" aria-hidden="true" />
-                    <span className="option-card__art choice-art">
-                      <img src={assetPath(item.asset)} alt="" aria-hidden="true" />
-                    </span>
-                    <span className="option-card__content choice-copy">
-                      <strong>{item.label}</strong>
-                      <small>{item.note}</small>
-                    </span>
-                    <span className="option-card__control choice-check" aria-hidden="true">
-                      <Check />
-                    </span>
-                    <span className="option-card__burst" aria-hidden="true" />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="choice-section sauces-section">
-            <div className="section-heading">
-              <p className="eyebrow">Sauce signature</p>
-              <h2>Choisis tes sauces</h2>
-            </div>
-            <div className="choice-grid sauces-grid">
-              <button
-                className={`option-card sauce-card no-sauce-card choice-blue mascot-none ${
-                  selectedSauces.includes(noSauceOption.id) ? "selected" : ""
-                }`}
-                type="button"
-                data-option={noSauceOption.id}
-                data-selected={selectedSauces.includes(noSauceOption.id)}
-                onClick={() => toggleSauce(noSauceOption.id)}
-                aria-pressed={selectedSauces.includes(noSauceOption.id)}
-              >
-                <span className="option-card__shadow" aria-hidden="true" />
-                <span className="option-card__accent" aria-hidden="true" />
-                <span className="option-card__art choice-art no-sauce-art">
-                  <X aria-hidden="true" />
-                </span>
-                <span className="option-card__content choice-copy">
-                  <strong>{noSauceOption.shortLabel}</strong>
-                  <small>Cheeseburger nature</small>
-                </span>
-                <span className="option-card__control choice-check" aria-hidden="true">
-                  <Check />
-                </span>
-                <span className="option-card__burst" aria-hidden="true" />
-              </button>
-              {sauces.map((item) => {
-                const selected = selectedSauces.includes(item.id);
-                return (
-                  <button
-                    className={`option-card sauce-card choice-${item.accent} mascot-${item.id} ${selected ? "selected" : ""}`}
-                    key={item.id}
-                    type="button"
-                    data-option={item.id}
-                    data-selected={selected}
-                    onClick={() => toggleSauce(item.id)}
-                    aria-pressed={selected}
-                  >
-                    <span className="option-card__shadow" aria-hidden="true" />
-                    <span className="option-card__accent" aria-hidden="true" />
-                    <span className="option-card__art choice-art">
-                      <img src={assetPath(item.asset)} alt="" aria-hidden="true" />
-                    </span>
-                    <span className="option-card__content choice-copy">
-                      <strong>{item.shortLabel}</strong>
-                      <small>{item.label}</small>
-                    </span>
-                    <span className="option-card__control choice-check" aria-hidden="true">
-                      <Check />
-                    </span>
-                    <span className="option-card__burst" aria-hidden="true" />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <ToppingsGrid selectedToppings={selectedToppings} onToggle={toggleTopping} />
+          <SaucesGrid selectedSauces={selectedSauces} onToggle={toggleSauce} />
         </section>
       )}
 
@@ -575,13 +437,21 @@ export function GuestOrder({ store }) {
               </InlineNotice>
             )}
             {submitState !== "loading" && submitState !== "success" && (
-              <button className="secondary-action add-burger-button" type="button" onClick={addAnotherBurger}>
+              <button className="secondary-action add-burger-button" type="button" onClick={openAddBurgerModal}>
                 <UserPlus aria-hidden="true" />
                 Ajouter un burger pour quelqu&apos;un d&apos;autre
               </button>
             )}
           </div>
         </section>
+      )}
+
+      {isAddBurgerOpen && (
+        <AddBurgerModal
+          existingNames={[guestName, ...cart.map((item) => item.guestName)]}
+          onCancel={closeAddBurgerModal}
+          onConfirm={confirmAddBurger}
+        />
       )}
 
       {step === "done" && readyAlert.trackedOrders.length > 0 && (
@@ -706,13 +576,229 @@ function ConfettiBurst() {
   );
 }
 
-function CartSummary({ cart }) {
-  const names = cart.map((item) => item.guestName).filter(Boolean);
+function ToppingsGrid({ selectedToppings, onToggle }) {
   return (
-    <p className="cart-summary">
-      {cart.length} burger{cart.length > 1 ? "s" : ""} déjà ajouté{cart.length > 1 ? "s" : ""}
-      {names.length ? ` (${names.join(", ")})` : ""}
-    </p>
+    <div className="choice-section toppings-section">
+      <div className="section-heading">
+        <p className="eyebrow">Ajouts</p>
+        <h2>Tes ajouts</h2>
+      </div>
+      <div className="choice-grid toppings-grid">
+        {toppings.map((item) => {
+          const selected = selectedToppings.includes(item.id);
+          return (
+            <button
+              className={`option-card choice-card choice-${item.accent} mascot-${item.id} ${selected ? "selected" : ""}`}
+              key={item.id}
+              type="button"
+              data-option={item.id}
+              data-selected={selected}
+              onClick={() => onToggle(item.id)}
+              aria-pressed={selected}
+            >
+              <span className="option-card__shadow" aria-hidden="true" />
+              <span className="option-card__accent" aria-hidden="true" />
+              <span className="option-card__art choice-art">
+                <img src={assetPath(item.asset)} alt="" aria-hidden="true" />
+              </span>
+              <span className="option-card__content choice-copy">
+                <strong>{item.label}</strong>
+                <small>{item.note}</small>
+              </span>
+              <span className="option-card__control choice-check" aria-hidden="true">
+                <Check />
+              </span>
+              <span className="option-card__burst" aria-hidden="true" />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SaucesGrid({ selectedSauces, onToggle }) {
+  return (
+    <div className="choice-section sauces-section">
+      <div className="section-heading">
+        <p className="eyebrow">Sauce signature</p>
+        <h2>Choisis tes sauces</h2>
+      </div>
+      <div className="choice-grid sauces-grid">
+        <button
+          className={`option-card sauce-card no-sauce-card choice-blue mascot-none ${
+            selectedSauces.includes(noSauceOption.id) ? "selected" : ""
+          }`}
+          type="button"
+          data-option={noSauceOption.id}
+          data-selected={selectedSauces.includes(noSauceOption.id)}
+          onClick={() => onToggle(noSauceOption.id)}
+          aria-pressed={selectedSauces.includes(noSauceOption.id)}
+        >
+          <span className="option-card__shadow" aria-hidden="true" />
+          <span className="option-card__accent" aria-hidden="true" />
+          <span className="option-card__art choice-art no-sauce-art">
+            <X aria-hidden="true" />
+          </span>
+          <span className="option-card__content choice-copy">
+            <strong>{noSauceOption.shortLabel}</strong>
+            <small>Cheeseburger nature</small>
+          </span>
+          <span className="option-card__control choice-check" aria-hidden="true">
+            <Check />
+          </span>
+          <span className="option-card__burst" aria-hidden="true" />
+        </button>
+        {sauces.map((item) => {
+          const selected = selectedSauces.includes(item.id);
+          return (
+            <button
+              className={`option-card sauce-card choice-${item.accent} mascot-${item.id} ${selected ? "selected" : ""}`}
+              key={item.id}
+              type="button"
+              data-option={item.id}
+              data-selected={selected}
+              onClick={() => onToggle(item.id)}
+              aria-pressed={selected}
+            >
+              <span className="option-card__shadow" aria-hidden="true" />
+              <span className="option-card__accent" aria-hidden="true" />
+              <span className="option-card__art choice-art">
+                <img src={assetPath(item.asset)} alt="" aria-hidden="true" />
+              </span>
+              <span className="option-card__content choice-copy">
+                <strong>{item.shortLabel}</strong>
+                <small>{item.label}</small>
+              </span>
+              <span className="option-card__control choice-check" aria-hidden="true">
+                <Check />
+              </span>
+              <span className="option-card__burst" aria-hidden="true" />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function AddBurgerModal({ existingNames, onCancel, onConfirm }) {
+  const [guestName, setGuestName] = useState("");
+  const [selectedToppings, setSelectedToppings] = useState([]);
+  const [selectedSauces, setSelectedSauces] = useState([]);
+  const [error, setError] = useState("");
+
+  const trimmedName = guestName.trim();
+  const isDuplicateName = useMemo(
+    () =>
+      trimmedName.length > 0 &&
+      existingNames.some((name) => name.trim().toLowerCase() === trimmedName.toLowerCase()),
+    [existingNames, trimmedName],
+  );
+  const namedCount = existingNames.filter(Boolean).length;
+
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (event.key === "Escape") onCancel();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onCancel]);
+
+  function toggleTopping(id) {
+    setSelectedToppings((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+    );
+  }
+
+  function toggleSauce(id) {
+    setSelectedSauces((current) => {
+      if (id === noSauceOption.id) return [noSauceOption.id];
+      const withoutNone = current.filter((item) => item !== noSauceOption.id);
+      return withoutNone.includes(id)
+        ? withoutNone.filter((item) => item !== id)
+        : [...withoutNone, id];
+    });
+  }
+
+  function handleConfirm() {
+    if (!trimmedName) {
+      setError("Ajoute un prénom avant de continuer.");
+      return;
+    }
+    if (isDuplicateName) {
+      setError(`Il y a déjà un burger pour « ${trimmedName} ». Ajoute une précision (ex: initiale du nom) pour les distinguer au comptoir.`);
+      return;
+    }
+    if (selectedSauces.length === 0) {
+      setError("Choisis une sauce ou Sans sauce.");
+      return;
+    }
+    onConfirm({ guestName: trimmedName, toppings: selectedToppings, sauces: selectedSauces });
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onCancel}>
+      <div
+        className="modal-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-burger-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="modal-sheet__header">
+          <h2 id="add-burger-title">Ajouter un burger</h2>
+          <button className="modal-sheet__close" type="button" onClick={onCancel} aria-label="Fermer">
+            <X aria-hidden="true" />
+          </button>
+        </header>
+
+        <div className="modal-sheet__body">
+          {namedCount > 0 && (
+            <p className="cart-summary">
+              Déjà dans la commande : {existingNames.filter(Boolean).join(", ")}
+            </p>
+          )}
+
+          <label className="field extra-guest-field">
+            <span>Prénom de cette personne</span>
+            <input
+              value={guestName}
+              maxLength={32}
+              autoComplete="off"
+              placeholder="Ex. Léa"
+              autoFocus
+              onChange={(event) => {
+                setGuestName(event.target.value);
+                setError("");
+              }}
+            />
+            {isDuplicateName && (
+              <small className="field-warning">
+                Il y a déjà un burger pour « {trimmedName} » dans cette commande.
+              </small>
+            )}
+          </label>
+
+          {error && <InlineNotice tone="error">{error}</InlineNotice>}
+
+          <ToppingsGrid selectedToppings={selectedToppings} onToggle={toggleTopping} />
+          <SaucesGrid selectedSauces={selectedSauces} onToggle={toggleSauce} />
+        </div>
+
+        <div className="modal-sheet__footer">
+          <button className="secondary-action cta-button" type="button" onClick={onCancel}>
+            Annuler
+          </button>
+          <button className="primary-action cta-button" type="button" onClick={handleConfirm}>
+            <span className="cta-button__base" aria-hidden="true" />
+            <span className="cta-button__shine" aria-hidden="true" />
+            <UserPlus aria-hidden="true" />
+            Ajouter ce burger
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
