@@ -35,6 +35,18 @@ def choose_number_font(number: int) -> ImageFont.ImageFont:
     return font(8, bold=True)
 
 
+def choose_corner_number_font(number: int) -> ImageFont.ImageFont:
+    text = f"#{number}"
+    image = Image.new("RGB", (WIDTH, HEIGHT), BLACK)
+    draw = ImageDraw.Draw(image)
+    for size in range(18, 6, -1):
+        selected_font = font(size, bold=True)
+        width, height = text_size(draw, text, selected_font)
+        if width <= 27 and height <= 13:
+            return selected_font
+    return font(7, bold=True)
+
+
 def _draw_centered(
     display: VirtualDisplay64,
     text: str,
@@ -43,6 +55,21 @@ def _draw_centered(
     fill: tuple[int, int, int],
 ) -> None:
     display.draw.text((WIDTH // 2, y), text, font=selected_font, fill=fill, anchor="ma")
+
+
+def _draw_corner_number(
+    display: VirtualDisplay64,
+    number: int,
+    *,
+    fill: tuple[int, int, int] = WHITE,
+    side: str = "right",
+) -> None:
+    text = f"#{number}"
+    selected_font = choose_corner_number_font(number)
+    if side == "left":
+        display.draw.text((4, 49), text, font=selected_font, fill=fill, anchor="la")
+        return
+    display.draw.text((60, 49), text, font=selected_font, fill=fill, anchor="ra")
 
 
 def _clean_display_name(value: str) -> str:
@@ -122,9 +149,7 @@ def render_order(event: OrderEvent, output_dir: Path, *, high_contrast: bool = F
     _draw_status_strip(display, event.led_label, color, high_contrast=high_contrast)
     _draw_guest_name(display, event.guest_name)
 
-    number_text = f"#{event.number}"
-    number_font = choose_number_font(event.number)
-    _draw_centered(display, number_text, 50, number_font, WHITE if high_contrast else (210, 210, 210))
+    _draw_corner_number(display, event.number, fill=WHITE if high_contrast else (235, 235, 235))
 
     path = output_dir / f"order-{_safe_filename(event.order_id)}-{event.status}.png"
     display.save(path)
@@ -147,7 +172,7 @@ def render_new_badge(event: OrderEvent, output_dir: Path, *, high_contrast: bool
         anchor="ma",
     )
     _draw_guest_name(display, event.guest_name)
-    display.draw.text((WIDTH // 2, 53), f"#{event.number}", font=font(8, bold=True), fill=yellow, anchor="ma")
+    _draw_corner_number(display, event.number, fill=yellow)
 
     path = output_dir / f"new-{_safe_filename(event.order_id)}.png"
     display.save(path)
@@ -177,7 +202,7 @@ def render_ready_alert_frame(
         _draw_guest_name(display, event.guest_name)
         display.draw.text((WIDTH // 2, 49), "PRET", font=font(11, bold=True), fill=green, anchor="ma")
 
-    display.draw.text((WIDTH // 2, 57), f"#{event.number}", font=font(6, bold=True), fill=WHITE, anchor="ma")
+    _draw_corner_number(display, event.number, fill=WHITE)
     path = output_dir / f"ready-alert-{_safe_filename(event.order_id)}-{frame % 2}.png"
     display.save(path)
     return path
@@ -199,7 +224,7 @@ def render_ready_pulse(
     display.draw.rectangle((0, 0, 63, 63), outline=green, width=3 if high_contrast else 2)
     display.draw.text((WIDTH // 2, 10), "COMMANDE", font=font(8, bold=True), fill=WHITE, anchor="ma")
     display.draw.text((WIDTH // 2, 26), "PRETE", font=font(18, bold=True), fill=green, anchor="ma")
-    display.draw.text((WIDTH // 2, 48), f"#{event.number}", font=font(9, bold=True), fill=WHITE, anchor="ma")
+    _draw_corner_number(display, event.number, fill=WHITE)
 
     path = output_dir / f"ready-pulse-{_safe_filename(event.order_id)}-{phase % 2}.png"
     display.save(path)
@@ -386,7 +411,7 @@ def render_last_call(event: OrderEvent, output_dir: Path, *, high_contrast: bool
     )
     _draw_guest_name(display, event.guest_name)
     display.draw.text((WIDTH // 2, 48), "APPEL", font=font(10, bold=True), fill=alert, anchor="ma")
-    display.draw.text((WIDTH // 2, 57), f"#{event.number}", font=font(7, bold=True), fill=WHITE, anchor="ma")
+    _draw_corner_number(display, event.number, fill=WHITE)
 
     path = output_dir / f"last-call-{_safe_filename(event.order_id)}.png"
     display.save(path)

@@ -8,6 +8,7 @@ from PIL import Image, ImageDraw
 
 from led_bridge.models import STATUS_LABELS, validate_order_event
 from led_bridge.renderer import (
+    choose_corner_number_font,
     choose_number_font,
     render_last_call,
     render_message,
@@ -42,6 +43,15 @@ class RendererTest(unittest.TestCase):
                 width, height = text_size(draw, f"#{number}", choose_number_font(number))
                 self.assertLessEqual(width, 30)
                 self.assertLessEqual(height, 12)
+
+    def test_corner_number_stays_away_from_center_seam(self):
+        probe = Image.new("RGB", (64, 64))
+        draw = ImageDraw.Draw(probe)
+        for number in (1, 39, 999, 9999):
+            width, height = text_size(draw, f"#{number}", choose_corner_number_font(number))
+            self.assertLessEqual(width, 27)
+            self.assertLessEqual(height, 13)
+            self.assertGreaterEqual(60 - width, 33)
 
     def test_guest_name_is_rendered_as_primary_content(self):
         with tempfile.TemporaryDirectory() as tmp:
