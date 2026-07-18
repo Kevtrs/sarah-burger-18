@@ -1391,6 +1391,43 @@ dd {
   overflow-wrap: anywhere;
 }
 
+.pickup-ack-badge {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 3px 8px;
+  padding: 9px 10px;
+  border: var(--border-thin);
+  border-radius: var(--radius-small);
+  background: var(--color-green-soft);
+  box-shadow: var(--shadow-small);
+}
+
+.pickup-ack-badge svg {
+  grid-row: 1 / span 2;
+  width: 20px;
+  height: 20px;
+  color: var(--color-green);
+}
+
+.pickup-ack-badge strong,
+.pickup-ack-badge span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.pickup-ack-badge strong {
+  font-size: 0.86rem;
+  font-weight: 1000;
+}
+
+.pickup-ack-badge span {
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1.12;
+}
+
 .ticket footer {
   justify-content: flex-end;
   flex-wrap: wrap;

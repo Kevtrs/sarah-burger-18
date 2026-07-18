@@ -27,6 +27,32 @@
   z-index: 1;
 }
 
+.vip-sarah-scene .success-number__burst {
+  border-color: var(--color-yellow);
+  background:
+    radial-gradient(circle, rgba(255, 250, 240, 0.78) 0 26%, transparent 27%),
+    repeating-conic-gradient(
+      from 0deg,
+      rgba(244, 195, 63, 0.32) 0 8deg,
+      rgba(255, 250, 240, 0.36) 8deg 16deg,
+      rgba(233, 54, 104, 0.26) 16deg 24deg
+    );
+  animation:
+    burst-shadow 700ms var(--ease-pop) 120ms both,
+    vip-neon-halo 1.8s linear 900ms 3;
+}
+
+.uncle-cod-scene .success-number {
+  background: #17120f;
+  color: var(--color-hot-soft);
+  text-shadow:
+    2px 0 0 var(--color-red),
+    -2px 0 0 var(--color-blue);
+  animation:
+    success-circle-reveal 720ms var(--ease-pop) both,
+    blacklist-glitch 620ms steps(2, end) 820ms 4;
+}
+
 .success-copy h1 {
   margin-bottom: 0;
   font-size: 2.24rem;
@@ -134,6 +160,194 @@
 .success-ticket small {
   color: var(--color-muted);
   font-weight: 1000;
+}
+
+.fun-name-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  width: min(330px, 100%);
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: var(--border-standard);
+  border-radius: var(--radius-small);
+  background: white;
+  box-shadow: var(--shadow-small);
+  text-align: left;
+}
+
+.fun-name-card svg {
+  width: 24px;
+  height: 24px;
+}
+
+.fun-name-card div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.fun-name-card strong,
+.fun-name-card span {
+  overflow-wrap: anywhere;
+}
+
+.fun-name-card strong {
+  font-size: 0.92rem;
+  font-weight: 1000;
+}
+
+.fun-name-card span {
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.vip-sarah-card {
+  border-color: var(--color-yellow);
+  background:
+    linear-gradient(90deg, rgba(255, 250, 240, 0.94), rgba(255, 240, 176, 0.96)),
+    white;
+  box-shadow:
+    var(--shadow-small),
+    0 0 0 4px rgba(244, 195, 63, 0.18),
+    0 0 24px rgba(244, 195, 63, 0.28);
+  animation: vip-card-pop 860ms var(--ease-pop) both;
+}
+
+.vip-sarah-card svg,
+.vip-sarah-card strong {
+  color: var(--color-red);
+  text-shadow: 0 0 9px rgba(244, 195, 63, 0.62);
+}
+
+.uncle-cod-card {
+  position: relative;
+  overflow: hidden;
+  border-color: var(--color-red);
+  background:
+    linear-gradient(90deg, rgba(23, 18, 15, 0.96), rgba(77, 22, 22, 0.94)),
+    #17120f;
+  color: white;
+  animation: blacklist-card-in 620ms steps(2, end) both;
+}
+
+.uncle-cod-card::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 5px,
+      rgba(255, 255, 255, 0.08) 5px 6px
+    );
+  content: "";
+  mix-blend-mode: screen;
+}
+
+.uncle-cod-card svg,
+.uncle-cod-card strong {
+  color: var(--color-hot-soft);
+  text-shadow:
+    2px 0 0 var(--color-red),
+    -2px 0 0 var(--color-blue);
+}
+
+.uncle-cod-card span {
+  color: rgba(255, 250, 240, 0.88);
+}
+
+.fun-name-card-compact {
+  width: 100%;
+  padding: 8px 9px;
+}
+
+.pickup-buzzer {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  width: min(350px, 100%);
+  align-items: center;
+  gap: 8px 10px;
+  padding: 11px;
+  border: var(--border-standard);
+  border-color: var(--color-green);
+  border-radius: var(--radius-small);
+  background:
+    linear-gradient(135deg, rgba(228, 243, 204, 0.96), rgba(255, 250, 240, 0.94)),
+    white;
+  box-shadow:
+    var(--shadow-small),
+    0 0 0 5px rgba(93, 143, 57, 0.14);
+  text-align: left;
+  animation: pager-buzzer-ring 780ms steps(2, end) 2;
+}
+
+.pickup-buzzer__beep {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: var(--border-standard);
+  border-radius: 50%;
+  background: var(--color-green);
+  color: white;
+  font-size: 0.72rem;
+  font-weight: 1000;
+  letter-spacing: 0;
+  box-shadow: 0 0 0 6px rgba(93, 143, 57, 0.16);
+}
+
+.pickup-buzzer div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.pickup-buzzer strong,
+.pickup-buzzer span,
+.pickup-buzzer small {
+  overflow-wrap: anywhere;
+}
+
+.pickup-buzzer strong {
+  font-size: 0.94rem;
+  font-weight: 1000;
+}
+
+.pickup-buzzer span,
+.pickup-buzzer small {
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.pickup-buzzer small {
+  grid-column: 1 / -1;
+  color: var(--color-red);
+}
+
+.pickup-arrive-button {
+  grid-column: 1 / -1;
+  min-height: 42px;
+  justify-content: center;
+}
+
+.pickup-arrive-button:disabled {
+  opacity: 0.72;
+}
+
+.pickup-buzzer-compact {
+  width: 100%;
+  padding: 8px 9px;
+}
+
+.pickup-buzzer-compact .pickup-buzzer__beep {
+  width: 38px;
+  height: 38px;
 }
 
 .order-queue-card {
@@ -356,6 +570,99 @@
   }
 }
 
+@keyframes pager-buzzer-ring {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+
+  20% {
+    transform: translateX(-2px) rotate(-1deg);
+  }
+
+  40% {
+    transform: translateX(2px) rotate(1deg);
+  }
+
+  60% {
+    transform: translateX(-1px) rotate(-0.5deg);
+  }
+}
+
+@keyframes vip-card-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.94) rotate(-1deg);
+  }
+
+  62% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.03) rotate(0.7deg);
+  }
+
+  100% {
+    transform: translateY(0) scale(1) rotate(0deg);
+  }
+}
+
+@keyframes vip-neon-halo {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+
+  42% {
+    filter: brightness(1.25);
+  }
+
+  48% {
+    filter: brightness(0.82);
+  }
+
+  54% {
+    filter: brightness(1.34);
+  }
+}
+
+@keyframes blacklist-card-in {
+  0% {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+
+  40% {
+    opacity: 1;
+    transform: translateX(6px);
+  }
+
+  70% {
+    transform: translateX(-3px);
+  }
+
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes blacklist-glitch {
+  0%,
+  100% {
+    transform: translateX(0) skewX(0deg);
+  }
+
+  25% {
+    transform: translateX(-3px) skewX(-5deg);
+  }
+
+  50% {
+    transform: translateX(3px) skewX(4deg);
+  }
+
+  75% {
+    transform: translateX(-1px) skewX(-2deg);
+  }
+}
+
 @media (min-width: 720px) {
   .success-scene {
     min-height: 590px;
@@ -381,6 +688,14 @@
     width: 112px;
     height: 112px;
   }
+
+  .pickup-buzzer {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .pickup-arrive-button {
+    grid-column: auto;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -389,6 +704,14 @@
   }
 
   .ready-alert-fired .success-number {
+    animation: none;
+  }
+
+  .pickup-buzzer,
+  .vip-sarah-card,
+  .vip-sarah-scene .success-number__burst,
+  .uncle-cod-card,
+  .uncle-cod-scene .success-number {
     animation: none;
   }
 }

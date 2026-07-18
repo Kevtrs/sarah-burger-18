@@ -53,6 +53,7 @@ export function KitchenDashboard({ store }) {
   const [authChecked, setAuthChecked] = useState(store.mode === "local");
   const [sessionMeta, setSessionMeta] = useState({});
   const [ordersSnapshotReady, setOrdersSnapshotReady] = useState(false);
+  const [pickupAcks, setPickupAcks] = useState({});
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -111,6 +112,15 @@ export function KitchenDashboard({ store }) {
     return store.subscribeSessionMeta?.(
       setSessionMeta,
       (err) => setError(err.message || "Impossible de suivre la session."),
+    );
+  }, [isUnlocked, store]);
+
+  useEffect(() => {
+    if (!isUnlocked || !store.subscribePickupAcks) return undefined;
+
+    return store.subscribePickupAcks(
+      setPickupAcks,
+      (err) => setError(err.message || "Impossible de suivre les retraits."),
     );
   }, [isUnlocked, store]);
 
@@ -294,6 +304,7 @@ export function KitchenDashboard({ store }) {
               key={order.id}
               order={order}
               now={now}
+              pickupAck={pickupAcks[order.id]}
               store={store}
               isPending={pendingId === order.id}
               onChangeStatus={changeStatus}
@@ -439,7 +450,7 @@ function EmptyOrders({ filter }) {
   return <p className="empty-state">{text}</p>;
 }
 
-function OrderTicket({ order, now, store, isPending, onChangeStatus }) {
+function OrderTicket({ order, now, pickupAck, store, isPending, onChangeStatus }) {
   const status = statuses[order.status] || statuses.received;
   const nextStatus = status.next;
   const previousStatus =
@@ -487,6 +498,14 @@ function OrderTicket({ order, now, store, isPending, onChangeStatus }) {
           <dd>{formatTime(order.createdAtMs)}</dd>
         </div>
       </dl>
+
+      {pickupAck?.acknowledged && (
+        <div className="pickup-ack-badge">
+          <CheckCircle2 aria-hidden="true" />
+          <strong>{order.guestName} a vu l&apos;appel.</strong>
+          <span>Il arrive récupérer la commande.</span>
+        </div>
+      )}
 
       <OrderMessages
         disabled={messagesDisabled}

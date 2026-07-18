@@ -175,6 +175,18 @@ function sortQueueEntries(entries) {
   return [...entries].sort((a, b) => a.number - b.number);
 }
 
+export function normalizePickupAck(data) {
+  return {
+    id: data.id || data.orderId || "",
+    orderId: data.orderId || data.id || "",
+    ownerUid: data.ownerUid || "",
+    orderNumber: Number(data.orderNumber || 0),
+    acknowledged: data.acknowledged === true,
+    seenAtMs: Number(data.seenAtMs || Date.now()),
+    updatedAtMs: Number(data.updatedAtMs || data.seenAtMs || Date.now()),
+  };
+}
+
 function normalizeClientRequestId(value) {
   if (typeof value === "string" && /^[a-zA-Z0-9_-]{8,80}$/.test(value)) return value;
   return crypto.randomUUID?.() || `order-${Date.now()}`;
@@ -460,6 +472,66 @@ function makeFirebaseOrderStore() {
       };
     },
 
+    subscribePickupAcks(onChange, onError) {
+      const { db } = requireFirebaseRuntime();
+      assertSessionKey();
+      const acksRef = ref(db, sessionPath("pickupAcks"));
+      let unsubscribe;
+      let cancelled = false;
+
+      requireKitchenUser()
+        .then(() => {
+          if (cancelled) return;
+          unsubscribe = onValue(
+            acksRef,
+            (snapshot) => {
+              const value = snapshot.val() || {};
+              const acks = Object.values(value)
+                .map(normalizePickupAck)
+                .reduce((acc, ack) => {
+                  if (ack.orderId) acc[ack.orderId] = ack;
+                  return acc;
+                }, {});
+              onChange(acks);
+            },
+            onError,
+          );
+        })
+        .catch(onError);
+
+      return () => {
+        cancelled = true;
+        unsubscribe?.();
+      };
+    },
+
+    subscribePickupAck(orderId, onChange, onError) {
+      const { db } = requireFirebaseRuntime();
+      assertSessionKey();
+      assertValidFirebaseKey(orderId, "orderId");
+      const ackRef = ref(db, sessionPath(`pickupAcks/${orderId}`));
+      let unsubscribe;
+      let cancelled = false;
+
+      ensureGuestAuth()
+        .then(() => {
+          if (cancelled) return;
+          unsubscribe = onValue(
+            ackRef,
+            (snapshot) => {
+              onChange(snapshot.exists() ? normalizePickupAck(snapshot.val()) : null);
+            },
+            onError,
+          );
+        })
+        .catch(onError);
+
+      return () => {
+        cancelled = true;
+        unsubscribe?.();
+      };
+    },
+
     subscribeOrder(orderId, onChange, onError) {
       const { db } = requireFirebaseRuntime();
       assertSessionKey();
@@ -535,6 +607,33 @@ function makeFirebaseOrderStore() {
       }
     },
 
+    async acknowledgePickup(orderId) {
+      const user = await ensureGuestAuth();
+      const { db } = requireFirebaseRuntime();
+      assertSessionKey();
+      assertValidFirebaseKey(orderId, "orderId");
+
+      const orderSnapshot = await get(ref(db, sessionPath(`orders/${orderId}`)));
+      if (!orderSnapshot.exists()) throw new Error("Commande introuvable.");
+
+      const order = normalizeOrder(orderSnapshot.val());
+      if (order.guestUid !== user.uid) throw new Error("Cette commande n'est pas liée à cet appareil.");
+      if (order.status !== "ready") throw new Error("La commande n'est pas encore prête.");
+
+      const payload = {
+        id: orderId,
+        orderId,
+        ownerUid: user.uid,
+        orderNumber: order.number,
+        acknowledged: true,
+        seenAtMs: serverTimestamp(),
+        updatedAtMs: serverTimestamp(),
+      };
+
+      await set(ref(db, sessionPath(`pickupAcks/${orderId}`)), payload);
+      return normalizePickupAck({ ...payload, seenAtMs: Date.now(), updatedAtMs: Date.now() });
+    },
+
     async archiveSession() {
       await archiveFirebaseSession();
     },
@@ -557,6 +656,7 @@ function makeLocalStore() {
   const pausedKey = `sarah-burger:${sessionId}:paused`;
   const unavailableKey = `sarah-burger:${sessionId}:unavailable`;
   const messagesKey = `sarah-burger:${sessionId}:messages`;
+  const pickupAcksKey = `sarah-burger:${sessionId}:pickupAcks`;
   const channel =
     typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(ordersKey);
 
@@ -608,6 +708,20 @@ function makeLocalStore() {
 
   function writeMessages(messages) {
     localStorage.setItem(messagesKey, JSON.stringify(messages));
+    window.dispatchEvent(new CustomEvent(LOCAL_EVENT));
+    channel?.postMessage("changed");
+  }
+
+  function readPickupAcks() {
+    try {
+      return JSON.parse(localStorage.getItem(pickupAcksKey) || "{}");
+    } catch {
+      return {};
+    }
+  }
+
+  function writePickupAcks(acks) {
+    localStorage.setItem(pickupAcksKey, JSON.stringify(acks));
     window.dispatchEvent(new CustomEvent(LOCAL_EVENT));
     channel?.postMessage("changed");
   }
@@ -703,6 +817,44 @@ function makeLocalStore() {
       });
     },
 
+    subscribePickupAcks(onChange) {
+      const handler = () => {
+        const acks = Object.values(readPickupAcks())
+          .map(normalizePickupAck)
+          .reduce((acc, ack) => {
+            if (ack.orderId) acc[ack.orderId] = ack;
+            return acc;
+          }, {});
+        onChange(acks);
+      };
+      window.addEventListener(LOCAL_EVENT, handler);
+      window.addEventListener("storage", handler);
+      channel?.addEventListener("message", handler);
+      handler();
+      return () => {
+        window.removeEventListener(LOCAL_EVENT, handler);
+        window.removeEventListener("storage", handler);
+        channel?.removeEventListener("message", handler);
+      };
+    },
+
+    subscribePickupAck(orderId, onChange) {
+      assertValidFirebaseKey(orderId, "orderId");
+      const handler = () => {
+        const ack = readPickupAcks()[orderId];
+        onChange(ack ? normalizePickupAck(ack) : null);
+      };
+      window.addEventListener(LOCAL_EVENT, handler);
+      window.addEventListener("storage", handler);
+      channel?.addEventListener("message", handler);
+      handler();
+      return () => {
+        window.removeEventListener(LOCAL_EVENT, handler);
+        window.removeEventListener("storage", handler);
+        channel?.removeEventListener("message", handler);
+      };
+    },
+
     subscribeOrderMessages(orderId, onChange) {
       assertValidFirebaseKey(orderId, "orderId");
       const handler = () => {
@@ -766,6 +918,25 @@ function makeLocalStore() {
     },
 
     async syncQueueIndex() {},
+
+    async acknowledgePickup(orderId) {
+      assertValidFirebaseKey(orderId, "orderId");
+      const order = readOrders().find((item) => item.id === orderId);
+      if (!order) throw new Error("Commande introuvable.");
+      if (order.status !== "ready") throw new Error("La commande n'est pas encore prête.");
+
+      const ack = normalizePickupAck({
+        id: orderId,
+        orderId,
+        ownerUid: "local",
+        orderNumber: order.number,
+        acknowledged: true,
+        seenAtMs: Date.now(),
+        updatedAtMs: Date.now(),
+      });
+      writePickupAcks({ ...readPickupAcks(), [orderId]: ack });
+      return ack;
+    },
 
     async archiveSession() {
       localStorage.setItem(archiveKey, "yes");

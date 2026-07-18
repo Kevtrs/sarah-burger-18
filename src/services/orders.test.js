@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { assertValidFirebaseKey, createOrderStore, normalizeOrder, normalizeQueueEntry } from "./orders";
+import {
+  assertValidFirebaseKey,
+  createOrderStore,
+  normalizeOrder,
+  normalizePickupAck,
+  normalizeQueueEntry,
+} from "./orders";
 
 describe("normalizeOrder", () => {
   it("falls back to received for an invalid status", () => {
@@ -131,6 +137,31 @@ describe("normalizeQueueEntry", () => {
       updatedAtMs: 2000,
     });
     expect(entry.guestName).toBeUndefined();
+  });
+});
+
+describe("normalizePickupAck", () => {
+  it("normalizes a pickup acknowledgement without burger details", () => {
+    const ack = normalizePickupAck({
+      id: "order-ready1",
+      orderId: "order-ready1",
+      ownerUid: "guest-1",
+      orderNumber: "32",
+      acknowledged: true,
+      seenAtMs: 1000,
+      sauce: "spicy",
+    });
+
+    expect(ack).toEqual({
+      id: "order-ready1",
+      orderId: "order-ready1",
+      ownerUid: "guest-1",
+      orderNumber: 32,
+      acknowledged: true,
+      seenAtMs: 1000,
+      updatedAtMs: 1000,
+    });
+    expect(ack.sauce).toBeUndefined();
   });
 });
 
@@ -298,5 +329,34 @@ describe("local order store", () => {
     await store.updateStatus(order.id, "served");
     await expect(store.sendOrderMessage(order.id, "Merci", "guest")).rejects.toThrow("terminee");
     unsubscribe();
+  });
+
+  it("lets a guest acknowledge pickup only once the order is ready", async () => {
+    const store = createOrderStore();
+    const order = await store.createOrder({
+      guestName: "Sarah",
+      toppings: [],
+      sauces: ["none"],
+      clientRequestId: "order-readyx",
+    });
+    let singleAck = null;
+    let allAcks = {};
+    const unsubscribeSingle = store.subscribePickupAck(order.id, (value) => {
+      singleAck = value;
+    });
+    const unsubscribeAll = store.subscribePickupAcks((value) => {
+      allAcks = value;
+    });
+
+    await expect(store.acknowledgePickup(order.id)).rejects.toThrow("prête");
+
+    await store.updateStatus(order.id, "ready");
+    const ack = await store.acknowledgePickup(order.id);
+
+    expect(ack.acknowledged).toBe(true);
+    expect(singleAck.acknowledged).toBe(true);
+    expect(allAcks[order.id].acknowledged).toBe(true);
+    unsubscribeSingle();
+    unsubscribeAll();
   });
 });

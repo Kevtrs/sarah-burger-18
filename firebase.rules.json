@@ -246,6 +246,39 @@
             }
           }
         },
+        "pickupAcks": {
+          ".read": "auth != null && root.child('kitchenUsers').child(auth.uid).val() == true",
+          ".write": false,
+          "$orderId": {
+            ".read": "auth != null && (root.child('kitchenUsers').child(auth.uid).val() == true || root.child('sessions').child($sessionId).child('orders').child($orderId).child('guestUid').val() == auth.uid)",
+            ".write": "auth != null && root.child('sessions').child($sessionId).child('orders').child($orderId).child('guestUid').val() == auth.uid && root.child('sessions').child($sessionId).child('orders').child($orderId).child('status').val() == 'ready' && newData.child('id').val() == $orderId && newData.child('orderId').val() == $orderId && newData.child('ownerUid').val() == auth.uid && newData.child('orderNumber').val() == root.child('sessions').child($sessionId).child('orders').child($orderId).child('number').val() && newData.child('acknowledged').val() == true",
+            ".validate": "newData.hasChildren(['id', 'orderId', 'ownerUid', 'orderNumber', 'acknowledged', 'seenAtMs', 'updatedAtMs'])",
+            "id": {
+              ".validate": "newData.isString() && newData.val() == $orderId && newData.val().length >= 8 && newData.val().length <= 80"
+            },
+            "orderId": {
+              ".validate": "newData.isString() && newData.val() == $orderId"
+            },
+            "ownerUid": {
+              ".validate": "newData.isString() && newData.val() == auth.uid"
+            },
+            "orderNumber": {
+              ".validate": "newData.isNumber() && newData.val() == root.child('sessions').child($sessionId).child('orders').child($orderId).child('number').val()"
+            },
+            "acknowledged": {
+              ".validate": "newData.isBoolean() && newData.val() == true"
+            },
+            "seenAtMs": {
+              ".validate": "newData.isNumber()"
+            },
+            "updatedAtMs": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
         "orderMessages": {
           ".read": "auth != null && root.child('kitchenUsers').child(auth.uid).val() == true",
           ".write": false,

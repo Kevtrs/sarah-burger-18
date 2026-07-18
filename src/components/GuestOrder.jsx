@@ -25,6 +25,7 @@ import {
 } from "../data/menu";
 import { useReadyOrderAlert } from "../hooks/useReadyOrderAlert";
 import { useOrderQueue } from "../hooks/useOrderQueue";
+import { usePickupAcks } from "../hooks/usePickupAcks";
 import { OrderMessages } from "./OrderMessages";
 
 const steps = ["identity", "customize", "review", "done"];
@@ -98,6 +99,30 @@ function unavailableLabelsForDraft(draft, sessionMeta) {
   return labels;
 }
 
+function normalizeFunName(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ");
+}
+
+function isSarahVipName(value) {
+  return normalizeFunName(value) === "sarah";
+}
+
+function isUncleCodName(value) {
+  const normalized = normalizeFunName(value);
+  if (!normalized) return false;
+
+  const compact = normalized.replace(/\s+/g, "");
+  const tokens = normalized.split(" ").filter(Boolean);
+  const variants = new Set(["karail", "cedric", "cedrick", "cedrik", "ced", "dric", "c"]);
+
+  return variants.has(compact) || tokens.some((token) => variants.has(token));
+}
+
 export function GuestOrder({ store }) {
   const [step, setStep] = useState("identity");
   const [guestName, setGuestName] = useState("");
@@ -124,6 +149,7 @@ export function GuestOrder({ store }) {
   const groupPromptTimerRef = useRef(null);
   const readyAlert = useReadyOrderAlert(store);
   const orderQueue = useOrderQueue(store, readyAlert.trackedOrders);
+  const pickupAcks = usePickupAcks(store, readyAlert.trackedOrders);
 
   const trimmedName = guestName.trim();
   const isDuplicateName = useMemo(
@@ -563,6 +589,7 @@ export function GuestOrder({ store }) {
           <SingleDoneScreen
             entry={readyAlert.trackedOrders[0]}
             orderQueue={orderQueue}
+            pickupAcks={pickupAcks}
             readyAlert={readyAlert}
             store={store}
           />
@@ -570,6 +597,7 @@ export function GuestOrder({ store }) {
           <GroupDoneScreen
             orderQueue={orderQueue}
             orders={readyAlert.trackedOrders}
+            pickupAcks={pickupAcks}
             readyAlert={readyAlert}
             store={store}
           />
@@ -1128,14 +1156,18 @@ function SelectedItemsRow({ toppings: toppingIds, sauces: sauceIds, nachos, comp
   );
 }
 
-function SingleDoneScreen({ entry, orderQueue, readyAlert, store }) {
+function SingleDoneScreen({ entry, orderQueue, pickupAcks, readyAlert, store }) {
   const isReady = entry.lastStatus === "ready";
   const messagesDisabled = entry.lastStatus === "served" || entry.lastStatus === "cancelled";
   const queueInfo = orderQueue.getInfo(entry);
+  const isSarahVip = isSarahVipName(entry.guestName);
+  const isUncleCod = isUncleCodName(entry.guestName);
 
   return (
     <section
-      className={`order-screen done-layout success-scene ${
+      className={`order-screen done-layout success-scene ${isSarahVip ? "vip-sarah-scene" : ""} ${
+        isUncleCod ? "uncle-cod-scene" : ""
+      } ${
         isReady || readyAlert.readyAnnounced ? "ready-alert-fired" : ""
       }`}
       aria-labelledby="done-title"
@@ -1157,6 +1189,7 @@ function SingleDoneScreen({ entry, orderQueue, readyAlert, store }) {
           : "Ta commande entre en cuisine. Garde bien ton numéro."}
       </p>
       <OrderQueueCard info={queueInfo} />
+      <FunNameNotice guestName={entry.guestName} />
       <div className="success-ticket" aria-hidden="true">
         <span>SARAH BURGER</span>
         <strong>#{entry.number}</strong>
@@ -1165,6 +1198,7 @@ function SingleDoneScreen({ entry, orderQueue, readyAlert, store }) {
       <SelectedItemsRow toppings={entry.toppings} sauces={entry.sauces} nachos={entry.nachos} />
       <StatusPill status={entry.lastStatus} />
       {isReady && <InlineNotice tone="success">Ta commande est prête !</InlineNotice>}
+      <PickupReadyPanel entry={entry} pickupAcks={pickupAcks} />
       <ReadyAlertPanel readyAlert={readyAlert} anyReady={isReady} />
       <OrderMessages
         disabled={messagesDisabled}
@@ -1177,7 +1211,7 @@ function SingleDoneScreen({ entry, orderQueue, readyAlert, store }) {
   );
 }
 
-function GroupDoneScreen({ orderQueue, orders, readyAlert, store }) {
+function GroupDoneScreen({ orderQueue, orders, pickupAcks, readyAlert, store }) {
   const anyReady = orders.some((item) => item.lastStatus === "ready");
   const queueInfos = orders.map((item) => ({ order: item, info: orderQueue.getInfo(item) }));
   const visibleQueueInfos = queueInfos.filter((item) => item.info.visible);
@@ -1202,6 +1236,8 @@ function GroupDoneScreen({ orderQueue, orders, readyAlert, store }) {
                 <span className="group-ticket-name">{item.guestName}</span>
                 <StatusPill status={item.lastStatus} />
               </div>
+              <FunNameNotice guestName={item.guestName} compact />
+              {item.lastStatus === "ready" && <PickupReadyPanel entry={item} pickupAcks={pickupAcks} compact />}
               <SelectedItemsRow toppings={item.toppings} sauces={item.sauces} nachos={item.nachos} compact />
             </li>
           );
@@ -1222,6 +1258,66 @@ function GroupDoneScreen({ orderQueue, orders, readyAlert, store }) {
           />
         ))}
       </div>
+    </section>
+  );
+}
+
+function FunNameNotice({ guestName, compact = false }) {
+  if (isSarahVipName(guestName)) {
+    return (
+      <div className={`fun-name-card vip-sarah-card ${compact ? "fun-name-card-compact" : ""}`}>
+        <Sparkles aria-hidden="true" />
+        <div>
+          <strong>VIP Sarah activé</strong>
+          <span>Accès reine du cheddar, priorité aux paillettes.</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (isUncleCodName(guestName)) {
+    return (
+      <div className={`fun-name-card uncle-cod-card ${compact ? "fun-name-card-compact" : ""}`}>
+        <X aria-hidden="true" />
+        <div>
+          <strong>Blacklist des Sions</strong>
+          <span>Ticket bloqué par la team COD. Pour être débloqué, négocie tes infos au stand Sarah Burger.</span>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function PickupReadyPanel({ compact = false, entry, pickupAcks }) {
+  if (entry.lastStatus !== "ready") return null;
+
+  const ack = pickupAcks.acks[entry.orderId];
+  const isPending = pickupAcks.pendingId === entry.orderId;
+  const isAcked = ack?.acknowledged === true;
+
+  return (
+    <section className={`pickup-buzzer ${compact ? "pickup-buzzer-compact" : ""}`} aria-live="polite">
+      <span className="pickup-buzzer__beep" aria-hidden="true">BIP</span>
+      <div>
+        <strong>{isAcked ? "Stand prévenu" : "Bip-bip, ton burger t'attend"}</strong>
+        <span>
+          {isAcked
+            ? "La cuisine voit que tu arrives."
+            : "Appuie ici quand tu pars le récupérer."}
+        </span>
+      </div>
+      <button
+        className="primary-action compact pickup-arrive-button"
+        type="button"
+        disabled={isPending || isAcked}
+        onClick={() => pickupAcks.acknowledge(entry)}
+      >
+        <CheckCircle2 aria-hidden="true" />
+        {isPending ? "Envoi..." : isAcked ? "J'arrive envoyé" : "Je viens récupérer"}
+      </button>
+      {pickupAcks.error && <small>{pickupAcks.error}</small>}
     </section>
   );
 }
