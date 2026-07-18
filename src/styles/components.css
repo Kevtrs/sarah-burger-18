@@ -497,8 +497,8 @@
 
 .choice-card {
   display: grid;
-  min-height: 66px;
-  grid-template-columns: 62px minmax(0, 1fr) 30px;
+  min-height: 92px;
+  grid-template-columns: 84px minmax(0, 1fr) 30px;
   gap: 6px;
   align-items: center;
   padding: 5px 8px 5px 2px;
@@ -506,8 +506,8 @@
 
 .sauce-card {
   display: grid;
-  min-height: 98px;
-  grid-template-rows: 48px minmax(0, auto) 26px;
+  min-height: 138px;
+  grid-template-rows: 88px minmax(0, auto) 26px;
   gap: 2px;
   justify-items: center;
   padding: 8px 7px 9px;
@@ -523,14 +523,14 @@
 }
 
 .choice-card .option-card__art {
-  width: 64px;
-  height: 60px;
-  margin-left: -6px;
+  width: 84px;
+  height: 84px;
+  margin-left: -8px;
 }
 
 .sauce-card .option-card__art {
   width: 100%;
-  height: 54px;
+  height: 88px;
 }
 
 .option-card__art img {
@@ -563,9 +563,9 @@
 }
 
 .no-sauce-art svg {
-  width: 42px;
-  height: 42px;
-  padding: 8px;
+  width: 62px;
+  height: 62px;
+  padding: 12px;
   border: var(--border-standard);
   border-radius: 50%;
   background: white;
