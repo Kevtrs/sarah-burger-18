@@ -23,6 +23,7 @@ import {
   toppings,
 } from "../data/menu";
 import { useReadyOrderAlert } from "../hooks/useReadyOrderAlert";
+import { OrderMessages } from "./OrderMessages";
 
 const steps = ["identity", "customize", "review", "done"];
 const progressLabels = ["Prénom", "Burger", "Validation"];
@@ -67,6 +68,32 @@ function withViewTransition(update, transitionName) {
 
 function makeClientRequestId() {
   return crypto.randomUUID?.() || `order-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function isUnavailable(sessionMeta, group, id) {
+  return sessionMeta?.unavailable?.[group]?.[id] === true;
+}
+
+function unavailableLabelsForDraft(draft, sessionMeta) {
+  const labels = [];
+
+  for (const item of toppings) {
+    if (draft.toppings?.includes(item.id) && isUnavailable(sessionMeta, "toppings", item.id)) {
+      labels.push(item.label);
+    }
+  }
+
+  for (const item of sauces) {
+    if (draft.sauces?.includes(item.id) && isUnavailable(sessionMeta, "sauces", item.id)) {
+      labels.push(item.label);
+    }
+  }
+
+  if (draft.nachos && isUnavailable(sessionMeta, "extras", nachosOption.id)) {
+    labels.push(nachosOption.label);
+  }
+
+  return labels;
 }
 
 export function GuestOrder({ store }) {
@@ -130,6 +157,26 @@ export function GuestOrder({ store }) {
   );
 
   useEffect(() => {
+    setSelectedToppings((current) =>
+      current.filter((id) => !isUnavailable(sessionMeta, "toppings", id)),
+    );
+    setSelectedSauces((current) =>
+      current.filter((id) => id === noSauceOption.id || !isUnavailable(sessionMeta, "sauces", id)),
+    );
+    if (isUnavailable(sessionMeta, "extras", nachosOption.id)) {
+      setWantsNachos(false);
+    }
+    setCart((current) =>
+      current.map((item) => ({
+        ...item,
+        toppings: item.toppings.filter((id) => !isUnavailable(sessionMeta, "toppings", id)),
+        sauces: item.sauces.filter((id) => id === noSauceOption.id || !isUnavailable(sessionMeta, "sauces", id)),
+        nachos: item.nachos && !isUnavailable(sessionMeta, "extras", nachosOption.id),
+      })),
+    );
+  }, [sessionMeta]);
+
+  useEffect(() => {
     if (!showIntro) return undefined;
 
     const timer = window.setTimeout(() => {
@@ -159,12 +206,14 @@ export function GuestOrder({ store }) {
   }
 
   function toggleTopping(id) {
+    if (isUnavailable(sessionMeta, "toppings", id)) return;
     setSelectedToppings((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
     );
   }
 
   function toggleSauce(id) {
+    if (id !== noSauceOption.id && isUnavailable(sessionMeta, "sauces", id)) return;
     setSelectedSauces((current) => {
       if (id === noSauceOption.id) return [noSauceOption.id];
       const withoutNone = current.filter((item) => item !== noSauceOption.id);
@@ -175,6 +224,7 @@ export function GuestOrder({ store }) {
   }
 
   function toggleNachos() {
+    if (isUnavailable(sessionMeta, "extras", nachosOption.id)) return;
     setWantsNachos((current) => !current);
   }
 
@@ -244,6 +294,11 @@ export function GuestOrder({ store }) {
       setSubmitState("error");
       return;
     }
+    if (sessionMeta.paused) {
+      setError("Le stand est en pause. Reessaie dans quelques minutes.");
+      setSubmitState("error");
+      return;
+    }
     if (!isOnline) {
       setError("Tu es hors ligne. Réessaie quand le réseau revient.");
       setSubmitState("error");
@@ -261,6 +316,13 @@ export function GuestOrder({ store }) {
         nachos: wantsNachos,
       },
     ];
+
+    const unavailableLabels = [...new Set(items.flatMap((item) => unavailableLabelsForDraft(item, sessionMeta)))];
+    if (unavailableLabels.length) {
+      setError(`${unavailableLabels.join(", ")} n'est plus disponible.`);
+      setSubmitState("error");
+      return;
+    }
 
     clearSubmitTimers();
     setIsSubmitting(true);
@@ -384,6 +446,7 @@ export function GuestOrder({ store }) {
       <Progress step={step} />
       {!isOnline && <InlineNotice tone="error">Connexion perdue. Réessaie quand le réseau revient.</InlineNotice>}
       {sessionMeta.archived && <InlineNotice tone="error">La session de commandes est archivée.</InlineNotice>}
+      {sessionMeta.paused && <InlineNotice tone="warning">Le stand est en pause. Tu peux regarder le menu, mais l&apos;envoi est bloque.</InlineNotice>}
       {error && <InlineNotice tone="error">{error}</InlineNotice>}
 
       {step === "identity" && (
@@ -441,9 +504,9 @@ export function GuestOrder({ store }) {
             <h1 id="customize-title">Compose ton burger</h1>
           </div>
 
-          <ToppingsGrid selectedToppings={selectedToppings} onToggle={toggleTopping} />
-          <SaucesGrid selectedSauces={selectedSauces} onToggle={toggleSauce} />
-          <NachosOption selected={wantsNachos} onToggle={toggleNachos} />
+          <ToppingsGrid selectedToppings={selectedToppings} onToggle={toggleTopping} unavailable={sessionMeta.unavailable} />
+          <SaucesGrid selectedSauces={selectedSauces} onToggle={toggleSauce} unavailable={sessionMeta.unavailable} />
+          <NachosOption selected={wantsNachos} onToggle={toggleNachos} unavailable={sessionMeta.unavailable} />
         </section>
       )}
 
@@ -486,6 +549,7 @@ export function GuestOrder({ store }) {
       {isAddBurgerOpen && (
         <AddBurgerModal
           existingNames={[guestName, ...cart.map((item) => item.guestName)]}
+          unavailable={sessionMeta.unavailable}
           onCancel={closeAddBurgerModal}
           onConfirm={confirmAddBurger}
         />
@@ -493,9 +557,9 @@ export function GuestOrder({ store }) {
 
       {step === "done" && readyAlert.trackedOrders.length > 0 && (
         readyAlert.trackedOrders.length === 1 ? (
-          <SingleDoneScreen entry={readyAlert.trackedOrders[0]} readyAlert={readyAlert} />
+          <SingleDoneScreen entry={readyAlert.trackedOrders[0]} readyAlert={readyAlert} store={store} />
         ) : (
-          <GroupDoneScreen orders={readyAlert.trackedOrders} readyAlert={readyAlert} />
+          <GroupDoneScreen orders={readyAlert.trackedOrders} readyAlert={readyAlert} store={store} />
         )
       )}
 
@@ -519,7 +583,8 @@ export function GuestOrder({ store }) {
               isSubmitting ||
               submitState === "loading" ||
               submitState === "success" ||
-              sessionMeta.archived
+              sessionMeta.archived ||
+              sessionMeta.paused
             }
           >
             <span className="cta-button__base" aria-hidden="true" />
@@ -613,7 +678,7 @@ function ConfettiBurst() {
   );
 }
 
-function ToppingsGrid({ selectedToppings, onToggle }) {
+function ToppingsGrid({ selectedToppings, onToggle, unavailable = {} }) {
   return (
     <div className="choice-section toppings-section">
       <div className="section-heading">
@@ -623,13 +688,16 @@ function ToppingsGrid({ selectedToppings, onToggle }) {
       <div className="choice-grid toppings-grid">
         {toppings.map((item) => {
           const selected = selectedToppings.includes(item.id);
+          const blocked = unavailable.toppings?.[item.id] === true;
           return (
             <button
-              className={`option-card choice-card choice-${item.accent} mascot-${item.id} ${selected ? "selected" : ""}`}
+              className={`option-card choice-card choice-${item.accent} mascot-${item.id} ${selected ? "selected" : ""} ${blocked ? "is-unavailable" : ""}`}
               key={item.id}
               type="button"
               data-option={item.id}
               data-selected={selected}
+              data-unavailable={blocked}
+              disabled={blocked}
               onClick={() => onToggle(item.id)}
               aria-pressed={selected}
             >
@@ -640,7 +708,7 @@ function ToppingsGrid({ selectedToppings, onToggle }) {
               </span>
               <span className="option-card__content choice-copy">
                 <strong>{item.label}</strong>
-                <small>{item.note}</small>
+                <small>{blocked ? "Epuise pour le moment" : item.note}</small>
               </span>
               <span className="option-card__control choice-check" aria-hidden="true">
                 <Check />
@@ -654,7 +722,7 @@ function ToppingsGrid({ selectedToppings, onToggle }) {
   );
 }
 
-function SaucesGrid({ selectedSauces, onToggle }) {
+function SaucesGrid({ selectedSauces, onToggle, unavailable = {} }) {
   return (
     <div className="choice-section sauces-section">
       <div className="section-heading">
@@ -688,13 +756,16 @@ function SaucesGrid({ selectedSauces, onToggle }) {
         </button>
         {sauces.map((item) => {
           const selected = selectedSauces.includes(item.id);
+          const blocked = unavailable.sauces?.[item.id] === true;
           return (
             <button
-              className={`option-card sauce-card choice-${item.accent} mascot-${item.id} ${selected ? "selected" : ""}`}
+              className={`option-card sauce-card choice-${item.accent} mascot-${item.id} ${selected ? "selected" : ""} ${blocked ? "is-unavailable" : ""}`}
               key={item.id}
               type="button"
               data-option={item.id}
               data-selected={selected}
+              data-unavailable={blocked}
+              disabled={blocked}
               onClick={() => onToggle(item.id)}
               aria-pressed={selected}
             >
@@ -705,7 +776,7 @@ function SaucesGrid({ selectedSauces, onToggle }) {
               </span>
               <span className="option-card__content choice-copy">
                 <strong>{item.shortLabel}</strong>
-                <small>{item.label}</small>
+                <small>{blocked ? "Epuisee" : item.label}</small>
               </span>
               <span className="option-card__control choice-check" aria-hidden="true">
                 <Check />
@@ -719,7 +790,9 @@ function SaucesGrid({ selectedSauces, onToggle }) {
   );
 }
 
-function NachosOption({ selected, onToggle }) {
+function NachosOption({ selected, onToggle, unavailable = {} }) {
+  const blocked = unavailable.extras?.[nachosOption.id] === true;
+
   return (
     <div className="choice-section nachos-section">
       <div className="section-heading">
@@ -728,10 +801,12 @@ function NachosOption({ selected, onToggle }) {
       </div>
       <div className="choice-grid nachos-grid">
         <button
-          className={`option-card choice-card choice-gold mascot-nachos ${selected ? "selected" : ""}`}
+          className={`option-card choice-card choice-gold mascot-nachos ${selected ? "selected" : ""} ${blocked ? "is-unavailable" : ""}`}
           type="button"
           data-option={nachosOption.id}
           data-selected={selected}
+          data-unavailable={blocked}
+          disabled={blocked}
           onClick={onToggle}
           aria-pressed={selected}
         >
@@ -742,7 +817,7 @@ function NachosOption({ selected, onToggle }) {
           </span>
           <span className="option-card__content choice-copy">
             <strong>{nachosOption.label}</strong>
-            <small>{nachosOption.note}</small>
+            <small>{blocked ? "Epuise pour le moment" : nachosOption.note}</small>
           </span>
           <span className="option-card__control choice-check" aria-hidden="true">
             <Check />
@@ -794,7 +869,7 @@ function GroupOrderPrompt({ onAddBurger, onDismiss }) {
   );
 }
 
-function AddBurgerModal({ existingNames, onCancel, onConfirm }) {
+function AddBurgerModal({ existingNames, unavailable = {}, onCancel, onConfirm }) {
   const [guestName, setGuestName] = useState("");
   const [selectedToppings, setSelectedToppings] = useState([]);
   const [selectedSauces, setSelectedSauces] = useState([]);
@@ -818,13 +893,25 @@ function AddBurgerModal({ existingNames, onCancel, onConfirm }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onCancel]);
 
+  useEffect(() => {
+    setSelectedToppings((current) =>
+      current.filter((id) => unavailable.toppings?.[id] !== true),
+    );
+    setSelectedSauces((current) =>
+      current.filter((id) => id === noSauceOption.id || unavailable.sauces?.[id] !== true),
+    );
+    if (unavailable.extras?.[nachosOption.id] === true) setWantsNachos(false);
+  }, [unavailable]);
+
   function toggleTopping(id) {
+    if (unavailable.toppings?.[id] === true) return;
     setSelectedToppings((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
     );
   }
 
   function toggleSauce(id) {
+    if (id !== noSauceOption.id && unavailable.sauces?.[id] === true) return;
     setSelectedSauces((current) => {
       if (id === noSauceOption.id) return [noSauceOption.id];
       const withoutNone = current.filter((item) => item !== noSauceOption.id);
@@ -835,6 +922,7 @@ function AddBurgerModal({ existingNames, onCancel, onConfirm }) {
   }
 
   function toggleNachos() {
+    if (unavailable.extras?.[nachosOption.id] === true) return;
     setWantsNachos((current) => !current);
   }
 
@@ -899,9 +987,9 @@ function AddBurgerModal({ existingNames, onCancel, onConfirm }) {
 
           {error && <InlineNotice tone="error">{error}</InlineNotice>}
 
-          <ToppingsGrid selectedToppings={selectedToppings} onToggle={toggleTopping} />
-          <SaucesGrid selectedSauces={selectedSauces} onToggle={toggleSauce} />
-          <NachosOption selected={wantsNachos} onToggle={toggleNachos} />
+          <ToppingsGrid selectedToppings={selectedToppings} onToggle={toggleTopping} unavailable={unavailable} />
+          <SaucesGrid selectedSauces={selectedSauces} onToggle={toggleSauce} unavailable={unavailable} />
+          <NachosOption selected={wantsNachos} onToggle={toggleNachos} unavailable={unavailable} />
         </div>
 
         <div className="modal-sheet__footer">
@@ -1027,8 +1115,9 @@ function SelectedItemsRow({ toppings: toppingIds, sauces: sauceIds, nachos, comp
   );
 }
 
-function SingleDoneScreen({ entry, readyAlert }) {
+function SingleDoneScreen({ entry, readyAlert, store }) {
   const isReady = entry.lastStatus === "ready";
+  const messagesDisabled = entry.lastStatus === "served" || entry.lastStatus === "cancelled";
 
   return (
     <section
@@ -1062,11 +1151,18 @@ function SingleDoneScreen({ entry, readyAlert }) {
       <StatusPill status={entry.lastStatus} />
       {isReady && <InlineNotice tone="success">Ta commande est prête !</InlineNotice>}
       <ReadyAlertPanel readyAlert={readyAlert} anyReady={isReady} />
+      <OrderMessages
+        disabled={messagesDisabled}
+        guestName={entry.guestName}
+        orderId={entry.orderId}
+        orderNumber={entry.number}
+        store={store}
+      />
     </section>
   );
 }
 
-function GroupDoneScreen({ orders, readyAlert }) {
+function GroupDoneScreen({ orders, readyAlert, store }) {
   const anyReady = orders.some((item) => item.lastStatus === "ready");
 
   return (
@@ -1096,6 +1192,18 @@ function GroupDoneScreen({ orders, readyAlert }) {
       </ul>
       <p className="success-note muted">Garde ces numéros. Viens récupérer chaque burger dès qu&apos;il est prêt.</p>
       <ReadyAlertPanel readyAlert={readyAlert} anyReady={anyReady} />
+      <div className="group-message-panels">
+        {orders.map((item) => (
+          <OrderMessages
+            disabled={item.lastStatus === "served" || item.lastStatus === "cancelled"}
+            guestName={item.guestName}
+            key={item.orderId}
+            orderId={item.orderId}
+            orderNumber={item.number}
+            store={store}
+          />
+        ))}
+      </div>
     </section>
   );
 }

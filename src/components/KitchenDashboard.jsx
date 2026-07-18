@@ -6,6 +6,9 @@ import {
   KeyRound,
   Loader2,
   LogOut,
+  PackageX,
+  PauseCircle,
+  PlayCircle,
   RotateCcw,
   ShieldCheck,
   Volume2,
@@ -18,10 +21,13 @@ import {
   getToppingLabels,
   nachosOption,
   noSauceOption,
+  sauces,
   statusOrder,
   statuses,
+  toppings,
 } from "../data/menu";
 import { useNewOrderSound } from "../hooks/useNewOrderSound";
+import { OrderMessages } from "./OrderMessages";
 
 const filters = [
   { id: "active", label: "En cours" },
@@ -33,6 +39,10 @@ const filters = [
 
 const WAIT_WARN_MINUTES = { received: 10, preparing: 12, ready: 5 };
 const WAIT_HOT_MINUTES = { received: 18, preparing: 20, ready: 10 };
+
+function isUnavailable(sessionMeta, group, id) {
+  return sessionMeta?.unavailable?.[group]?.[id] === true;
+}
 
 export function KitchenDashboard({ store }) {
   const [orders, setOrders] = useState([]);
@@ -152,6 +162,31 @@ export function KitchenDashboard({ store }) {
     }
   }
 
+  async function togglePause() {
+    setPendingId("session-pause");
+    setError("");
+    try {
+      await store.setSessionPaused?.(!sessionMeta.paused);
+    } catch (err) {
+      setError(err.message || "La pause du stand n'a pas pu etre changee.");
+    } finally {
+      setPendingId("");
+    }
+  }
+
+  async function toggleUnavailable(group, id) {
+    const nextUnavailable = !isUnavailable(sessionMeta, group, id);
+    setPendingId(`availability:${group}:${id}`);
+    setError("");
+    try {
+      await store.setUnavailableItem?.(group, id, nextUnavailable);
+    } catch (err) {
+      setError(err.message || "La disponibilite n'a pas pu etre changee.");
+    } finally {
+      setPendingId("");
+    }
+  }
+
   async function signOut() {
     await store.signOutKitchen?.();
     setIsUnlocked(false);
@@ -178,7 +213,7 @@ export function KitchenDashboard({ store }) {
           {store.mode === "firebase" ? "Temps réel" : "Mode local"}
         </span>
         <button
-          className="secondary-action compact"
+          className="secondary-action compact kitchen-sound-toggle"
           type="button"
           aria-pressed={soundEnabled}
           onClick={toggleSound}
@@ -187,6 +222,16 @@ export function KitchenDashboard({ store }) {
           {soundEnabled ? "Son activé" : "Son coupé"}
         </button>
         {sessionMeta.archived && <span className="status-pill status-blue">Session archivée</span>}
+        <button
+          className={`secondary-action compact ${sessionMeta.paused ? "pause-active" : ""}`}
+          type="button"
+          aria-pressed={Boolean(sessionMeta.paused)}
+          onClick={togglePause}
+          disabled={pendingId === "session-pause" || sessionMeta.archived}
+        >
+          {sessionMeta.paused ? <PlayCircle aria-hidden="true" /> : <PauseCircle aria-hidden="true" />}
+          {sessionMeta.paused ? "Reprendre" : "Pause stand"}
+        </button>
         <button
           className="secondary-action compact"
           type="button"
@@ -203,6 +248,13 @@ export function KitchenDashboard({ store }) {
       </section>
 
       {error && <p className="notice notice-error">{error}</p>}
+      {sessionMeta.paused && <p className="notice notice-warning">Stand en pause : les invites voient le menu mais ne peuvent plus envoyer.</p>}
+
+      <AvailabilityPanel
+        pendingId={pendingId}
+        sessionMeta={sessionMeta}
+        onToggle={toggleUnavailable}
+      />
 
       <section className="stats-row" aria-label="Résumé des commandes">
         <Stat label="À préparer" value={counts.received} icon={<Clock3 aria-hidden="true" />} />
@@ -234,6 +286,7 @@ export function KitchenDashboard({ store }) {
               key={order.id}
               order={order}
               now={now}
+              store={store}
               isPending={pendingId === order.id}
               onChangeStatus={changeStatus}
             />
@@ -241,6 +294,53 @@ export function KitchenDashboard({ store }) {
         </section>
       )}
     </main>
+  );
+}
+
+function AvailabilityPanel({ pendingId, sessionMeta, onToggle }) {
+  const groups = [
+    { id: "toppings", label: "Ajouts", items: toppings },
+    { id: "sauces", label: "Sauces", items: sauces },
+    { id: "extras", label: "Extra", items: [nachosOption] },
+  ];
+
+  return (
+    <section className="availability-panel" aria-label="Disponibilites du stand">
+      <header>
+        <div>
+          <p className="eyebrow">Stock minute</p>
+          <h2>Disponibilite</h2>
+        </div>
+        <small>Coupe un produit des commandes client.</small>
+      </header>
+      <div className="availability-groups">
+        {groups.map((group) => (
+          <div className="availability-group" key={group.id}>
+            <strong>{group.label}</strong>
+            <div className="availability-chip-row">
+              {group.items.map((item) => {
+                const blocked = isUnavailable(sessionMeta, group.id, item.id);
+                const chipPending = pendingId === `availability:${group.id}:${item.id}`;
+                return (
+                  <button
+                    className={`availability-chip ${blocked ? "is-off" : ""}`}
+                    key={item.id}
+                    type="button"
+                    aria-pressed={blocked}
+                    disabled={chipPending}
+                    onClick={() => onToggle(group.id, item.id)}
+                  >
+                    {chipPending ? <Loader2 className="spin" aria-hidden="true" /> : <PackageX aria-hidden="true" />}
+                    <span>{item.shortLabel || item.label}</span>
+                    <small>{blocked ? "Epuise" : "OK"}</small>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -331,7 +431,7 @@ function EmptyOrders({ filter }) {
   return <p className="empty-state">{text}</p>;
 }
 
-function OrderTicket({ order, now, isPending, onChangeStatus }) {
+function OrderTicket({ order, now, store, isPending, onChangeStatus }) {
   const status = statuses[order.status] || statuses.received;
   const nextStatus = status.next;
   const previousStatus =
@@ -339,6 +439,7 @@ function OrderTicket({ order, now, isPending, onChangeStatus }) {
   const toppingLabels = getToppingLabels(order.toppings);
   const sauceLabels = getSauceLabels(order.sauces || order.sauce);
   const wait = getWaitInfo(order, now);
+  const messagesDisabled = order.status === "served" || order.status === "cancelled";
 
   return (
     <article className={`ticket ticket-${status.color}`}>
@@ -378,6 +479,15 @@ function OrderTicket({ order, now, isPending, onChangeStatus }) {
           <dd>{formatTime(order.createdAtMs)}</dd>
         </div>
       </dl>
+
+      <OrderMessages
+        disabled={messagesDisabled}
+        guestName={order.guestName}
+        mode="kitchen"
+        orderId={order.id}
+        orderNumber={order.number}
+        store={store}
+      />
 
       <footer>
         {previousStatus && (

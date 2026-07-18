@@ -93,6 +93,16 @@ async function waitForTicketStatus(page, text) {
   await page.locator(".ticket .status-pill", { hasText: text }).waitFor();
 }
 
+async function dismissGroupPromptIfVisible(page) {
+  const dismissButton = page.getByRole("button", { name: "Non, juste moi" });
+  try {
+    await dismissButton.waitFor({ timeout: 900 });
+    await dismissButton.click();
+  } catch {
+    // The prompt is intentionally delayed and does not always appear before submit.
+  }
+}
+
 async function assertMascotVisible(page, card, label) {
   await page.waitForTimeout(650);
 
@@ -124,7 +134,7 @@ async function assertMascotVisible(page, card, label) {
 }
 
 async function exerciseMascotSelection(page) {
-  const toppingCards = page.locator("button.choice-card");
+  const toppingCards = page.locator(".toppings-grid button.choice-card");
   const sauceCards = page.locator("button.sauce-card");
   const onionsCard = toppingCards.nth(2);
   const spicyCard = sauceCards.nth(5);
@@ -163,7 +173,7 @@ async function exerciseMascotSelection(page) {
 
 async function submitOrderFromPage(page, guestName, toppingIndex, sauceIndex) {
   await page.addInitScript(() => {
-    window.localStorage.removeItem("sarah-burger-ready-alert-v1");
+    window.localStorage.removeItem("sarah-burger-ready-alert-v2");
   });
   await page.goto(`${appUrl}/#commande`);
   const nameInput = page.locator('input[placeholder="Ex. Sarah"]');
@@ -176,10 +186,11 @@ async function submitOrderFromPage(page, guestName, toppingIndex, sauceIndex) {
   }
   await nameInput.fill(guestName);
   await page.getByRole("button", { name: "Continuer" }).click();
-  await page.locator("button.choice-card").first().waitFor();
-  await page.locator("button.choice-card").nth(toppingIndex).click();
+  await page.locator(".toppings-grid button.choice-card").first().waitFor();
+  await page.locator(".toppings-grid button.choice-card").nth(toppingIndex).click();
   await page.locator("button.sauce-card").nth(sauceIndex).click();
   await page.getByRole("button", { name: "Continuer" }).click();
+  await dismissGroupPromptIfVisible(page);
   await page.getByRole("button", { name: "Envoyer" }).click();
   await page.locator(".order-number").waitFor();
 }
@@ -282,10 +293,10 @@ async function run() {
   await page.goto(`${appUrl}/#commande`);
   await page.locator('input[placeholder="Ex. Sarah"]').fill("Nina");
   await page.getByRole("button", { name: "Continuer" }).click();
-  await page.locator("button.choice-card").first().waitFor();
+  await page.locator(".toppings-grid button.choice-card").first().waitFor();
 
-  const toppingCards = page.locator("button.choice-card");
-  if ((await toppingCards.count()) !== 3) throw new Error("Expected 3 topping cards.");
+  const toppingCards = page.locator(".toppings-grid button.choice-card");
+  if ((await toppingCards.count()) !== 4) throw new Error("Expected 4 topping cards.");
   const mascotMetrics = await exerciseMascotSelection(page);
   await toppingCards.nth(1).click();
 
@@ -295,6 +306,7 @@ async function run() {
   await sauceCards.nth(6).click();
 
   await page.getByRole("button", { name: "Continuer" }).click();
+  await dismissGroupPromptIfVisible(page);
   const reviewText = await page.locator(".summary-list").innerText();
   if (!reviewText.includes("Giant") || !reviewText.includes("Moutarde")) {
     throw new Error(`Multiple sauces are missing from the review: ${reviewText}`);
@@ -312,15 +324,14 @@ async function run() {
 
   const readyPermission = await page.evaluate(() => ({
     readyAlertSoundPlays: window.__readyAlertSoundPlays,
-    stored: JSON.parse(window.localStorage.getItem("sarah-burger-ready-alert-v1")),
+    stored: JSON.parse(window.localStorage.getItem("sarah-burger-ready-alert-v2")),
   }));
   if (readyPermission.readyAlertSoundPlays !== 0) {
     throw new Error("Ready alert sound played while only unlocking audio.");
   }
   if (
-    !readyPermission.stored?.orderId ||
-    readyPermission.stored.audioUnlocked !== true ||
-    readyPermission.stored.watchEnabled !== true
+    !readyPermission.stored?.orders?.[0]?.orderId ||
+    readyPermission.stored.audioUnlocked !== true
   ) {
     throw new Error("Ready alert fallback preference/order was not stored.");
   }
@@ -383,14 +394,14 @@ async function run() {
 
   const readyAfterReady = await page.evaluate(() => ({
     soundPlays: window.__readyAlertSoundPlays,
-    stored: JSON.parse(window.localStorage.getItem("sarah-burger-ready-alert-v1")),
+    stored: JSON.parse(window.localStorage.getItem("sarah-burger-ready-alert-v2")),
     title: document.querySelector("#done-title")?.innerText,
     vibrationCount: window.__readyVibrations.length,
   }));
   if (
     readyAfterReady.soundPlays !== 1 ||
     readyAfterReady.vibrationCount !== 1 ||
-    readyAfterReady.stored?.readyNotified !== true ||
+    !readyAfterReady.stored?.orders?.some((order) => order.readyNotified === true) ||
     readyAfterReady.title !== "Ta commande est prête !"
   ) {
     throw new Error(`Ready alert did not fire correctly: ${JSON.stringify(readyAfterReady)}`);
@@ -401,18 +412,18 @@ async function run() {
   await page.waitForTimeout(900);
   const readyAfterClientReload = await page.evaluate(() => ({
     soundPlays: window.__readyAlertSoundPlays,
-    stored: JSON.parse(window.localStorage.getItem("sarah-burger-ready-alert-v1")),
+    stored: JSON.parse(window.localStorage.getItem("sarah-burger-ready-alert-v2")),
     vibrationCount: window.__readyVibrations.length,
   }));
   if (
     readyAfterClientReload.soundPlays !== 0 ||
     readyAfterClientReload.vibrationCount !== 0 ||
-    readyAfterClientReload.stored?.readyNotified !== true
+    !readyAfterClientReload.stored?.orders?.some((order) => order.readyNotified === true)
   ) {
     throw new Error(`Ready alert replayed after reload: ${JSON.stringify(readyAfterClientReload)}`);
   }
 
-  const soundToggle = kitchenPage.locator('button[aria-pressed]');
+  const soundToggle = kitchenPage.locator("button.kitchen-sound-toggle");
   if ((await soundToggle.count()) !== 1) throw new Error("Kitchen sound toggle not found.");
   await soundToggle.click();
   const storedSoundOff = await kitchenPage.evaluate(() =>
@@ -440,11 +451,11 @@ async function run() {
   await deniedPage.locator(".ready-alert-panel", { hasText: "Garde cette page ouverte" }).waitFor();
 
   const deniedPermission = await deniedPage.evaluate(() => ({
-    stored: JSON.parse(window.localStorage.getItem("sarah-burger-ready-alert-v1")),
+    stored: JSON.parse(window.localStorage.getItem("sarah-burger-ready-alert-v2")),
   }));
   if (
     deniedPermission.stored?.audioUnlocked !== true ||
-    deniedPermission.stored?.watchEnabled !== true
+    !deniedPermission.stored?.orders?.[0]?.orderId
   ) {
     throw new Error(`Page alert preference was not stored: ${JSON.stringify(deniedPermission)}`);
   }
@@ -532,10 +543,10 @@ async function run() {
     await viewportPage.locator('input[placeholder="Ex. Sarah"]').fill("Vue");
     await viewportPage.getByRole("button", { name: "Continuer" }).click();
     const stickyCustomize = await checkStickyActions(viewportPage, `${viewport.name} customize`);
-    await viewportPage.locator("button.choice-card").nth(2).click();
+    await viewportPage.locator(".toppings-grid button.choice-card").nth(2).click();
     const viewportOnions = await assertMascotVisible(
       viewportPage,
-      viewportPage.locator("button.choice-card").nth(2),
+      viewportPage.locator(".toppings-grid button.choice-card").nth(2),
       `Oignons frits ${viewport.name}`,
     );
     await viewportPage.locator("button.sauce-card").nth(5).click();

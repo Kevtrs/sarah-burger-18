@@ -6,7 +6,7 @@ describe("normalizeOrder", () => {
     const order = normalizeOrder({
       id: "o1",
       number: "20",
-      guestName: "Léa",
+      guestName: "Lea",
       status: "bogus",
       createdAtMs: 1000,
     });
@@ -30,7 +30,7 @@ describe("normalizeOrder", () => {
     const order = normalizeOrder({
       id: "o3",
       number: 22,
-      guestName: "Zoé",
+      guestName: "Zoe",
       sauces: { mayo: true, ketchup: true, spicy: false },
       status: "received",
       createdAtMs: 1000,
@@ -68,14 +68,14 @@ describe("normalizeOrder", () => {
     const withoutField = normalizeOrder({
       id: "o6",
       number: 25,
-      guestName: "Zoé",
+      guestName: "Zoe",
       status: "received",
       createdAtMs: 1000,
     });
     const withTruthyString = normalizeOrder({
       id: "o7",
       number: 26,
-      guestName: "Zoé",
+      guestName: "Zoe",
       nachos: "true",
       status: "received",
       createdAtMs: 1000,
@@ -83,7 +83,7 @@ describe("normalizeOrder", () => {
     const withTrue = normalizeOrder({
       id: "o8",
       number: 27,
-      guestName: "Zoé",
+      guestName: "Zoe",
       nachos: true,
       status: "received",
       createdAtMs: 1000,
@@ -127,7 +127,7 @@ describe("local order store", () => {
       clientRequestId: "order-aaaaaaaa",
     });
     const second = await store.createOrder({
-      guestName: "Léa",
+      guestName: "Lea",
       toppings: [],
       sauces: ["none"],
       clientRequestId: "order-bbbbbbbb",
@@ -185,6 +185,66 @@ describe("local order store", () => {
         sauces: ["none"],
         clientRequestId: "order-eeeeeeee",
       }),
-    ).rejects.toThrow("archivée");
+    ).rejects.toThrow("archiv");
+  });
+
+  it("blocks new orders while the stand is paused", async () => {
+    const store = createOrderStore();
+    await store.setSessionPaused(true);
+
+    await expect(
+      store.createOrder({
+        guestName: "Tom",
+        toppings: [],
+        sauces: ["none"],
+        clientRequestId: "order-ffffffff",
+      }),
+    ).rejects.toThrow("pause");
+  });
+
+  it("blocks unavailable selected menu items", async () => {
+    const store = createOrderStore();
+    await store.setUnavailableItem("sauces", "ketchup", true);
+
+    await expect(
+      store.createOrder({
+        guestName: "Tom",
+        toppings: [],
+        sauces: ["ketchup"],
+        clientRequestId: "order-gggggggg",
+      }),
+    ).rejects.toThrow("Ketchup");
+
+    const order = await store.createOrder({
+      guestName: "Lina",
+      toppings: [],
+      sauces: ["none"],
+      clientRequestId: "order-hhhhhhhh",
+    });
+    expect(order.sauces).toEqual(["none"]);
+  });
+
+  it("keeps a per-order message thread between guest and kitchen", async () => {
+    const store = createOrderStore();
+    const order = await store.createOrder({
+      guestName: "Mila",
+      toppings: [],
+      sauces: ["none"],
+      clientRequestId: "order-iiiiiiii",
+    });
+    let messages = [];
+    const unsubscribe = store.subscribeOrderMessages(order.id, (value) => {
+      messages = value;
+    });
+
+    await store.sendOrderMessage(order.id, "Encore 5 min ?", "guest");
+    await store.sendOrderMessage(order.id, "Oui, ca arrive.", "kitchen");
+
+    expect(messages.map((message) => message.sender)).toEqual(["guest", "kitchen"]);
+    expect(messages.map((message) => message.text)).toEqual(["Encore 5 min ?", "Oui, ca arrive."]);
+
+    await store.updateStatus(order.id, "served");
+    await expect(store.sendOrderMessage(order.id, "Merci", "guest")).rejects.toThrow("terminee");
+    unsubscribe();
   });
 });

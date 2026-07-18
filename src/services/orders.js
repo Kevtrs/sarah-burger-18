@@ -1,6 +1,7 @@
 import {
   get,
   onValue,
+  push,
   ref,
   runTransaction,
   serverTimestamp,
@@ -8,12 +9,22 @@ import {
   update,
 } from "firebase/database";
 import { appConfig, hasFirebaseConfig } from "./config";
-import { ensureGuestAuth, hasKitchenAccess, signInKitchen, signOutKitchen, subscribeAuth } from "./auth";
+import {
+  ensureGuestAuth,
+  hasKitchenAccess,
+  requireKitchenUser,
+  signInKitchen,
+  signOutKitchen,
+  subscribeAuth,
+} from "./auth";
 import { requireFirebaseRuntime } from "./firebase";
 import {
   archiveFirebaseSession,
+  normalizeSessionMeta,
   sessionId,
   sessionPath,
+  setFirebaseSessionPaused,
+  setFirebaseUnavailableItem,
   subscribeConnection,
   subscribeSessionMeta,
 } from "./session";
@@ -23,7 +34,25 @@ const INVALID_FIREBASE_KEY = /[.#$[\]/]/;
 const allowedToppings = ["pickles", "jalapenos", "onions", "bacon"];
 const allowedSauces = ["bigmac", "giant", "mayo", "ketchup", "spicy", "mustard"];
 const allowedStatuses = ["received", "preparing", "ready", "served", "cancelled"];
+const allowedUnavailable = {
+  toppings: allowedToppings,
+  sauces: allowedSauces,
+  extras: ["nachos"],
+};
 const noSauceId = "none";
+const itemLabels = {
+  pickles: "Cornichons",
+  jalapenos: "Jalapenos",
+  onions: "Oignons frits",
+  bacon: "Bacon",
+  bigmac: "Big Mac maison",
+  giant: "Giant maison",
+  mayo: "Mayonnaise",
+  ketchup: "Ketchup",
+  spicy: "Sauce piquante",
+  mustard: "Moutarde",
+  nachos: "Nachos au cheddar",
+};
 
 export function assertValidFirebaseKey(value, label) {
   if (
@@ -41,6 +70,10 @@ function assertSessionKey() {
 
 function cleanName(name) {
   return name.trim().replace(/\s+/g, " ").slice(0, 32);
+}
+
+function cleanMessageText(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").slice(0, 180);
 }
 
 function normalizeArray(value, allowedValues) {
@@ -116,6 +149,80 @@ function sortOrders(orders) {
 function normalizeClientRequestId(value) {
   if (typeof value === "string" && /^[a-zA-Z0-9_-]{8,80}$/.test(value)) return value;
   return crypto.randomUUID?.() || `order-${Date.now()}`;
+}
+
+function normalizeMessage(data) {
+  return {
+    id: data.id || "",
+    orderId: data.orderId || "",
+    sender: data.sender === "kitchen" ? "kitchen" : "guest",
+    text: typeof data.text === "string" ? data.text : "",
+    authorUid: data.authorUid || "",
+    createdAtMs: Number(data.createdAtMs || Date.now()),
+  };
+}
+
+function sortMessages(messages) {
+  return [...messages].sort((a, b) => a.createdAtMs - b.createdAtMs);
+}
+
+function hasUnavailable(meta, group, id) {
+  return normalizeSessionMeta(meta).unavailable[group]?.[id] === true;
+}
+
+function validateUnavailableTarget(group, id) {
+  if (!allowedUnavailable[group]?.includes(id)) {
+    throw new Error("Element de disponibilite invalide.");
+  }
+}
+
+function findUnavailableSelections(input, meta) {
+  const unavailable = [];
+
+  for (const id of normalizeArray(input.toppings, allowedToppings)) {
+    if (hasUnavailable(meta, "toppings", id)) unavailable.push(itemLabels[id] || id);
+  }
+
+  for (const id of normalizeSauces(input.sauces, input.sauce).filter((item) => item !== noSauceId)) {
+    if (hasUnavailable(meta, "sauces", id)) unavailable.push(itemLabels[id] || id);
+  }
+
+  if (input.nachos === true && hasUnavailable(meta, "extras", "nachos")) {
+    unavailable.push(itemLabels.nachos);
+  }
+
+  return unavailable;
+}
+
+function assertOrderSessionState(input, meta) {
+  const sessionMeta = normalizeSessionMeta(meta);
+
+  if (sessionMeta.archived) {
+    throw new Error("La session est archivee.");
+  }
+
+  if (sessionMeta.paused) {
+    throw new Error("Le stand est en pause. Reessaie dans quelques minutes.");
+  }
+
+  const unavailable = findUnavailableSelections(input, sessionMeta);
+  if (unavailable.length) {
+    throw new Error(`${unavailable.join(", ")} n'est plus disponible.`);
+  }
+}
+
+async function readFirebaseSessionMeta(db) {
+  const [archived, paused, unavailable] = await Promise.all([
+    get(ref(db, sessionPath("meta/archived"))),
+    get(ref(db, sessionPath("meta/paused"))),
+    get(ref(db, sessionPath("meta/unavailable"))),
+  ]);
+
+  return normalizeSessionMeta({
+    archived: archived.val(),
+    paused: paused.val(),
+    unavailable: unavailable.val(),
+  });
 }
 
 function createOrderPayload(input, number, user) {
@@ -206,6 +313,9 @@ function makeFirebaseOrderStore() {
         throw new Error("Cette commande existe déjà pour un autre invité.");
       }
 
+      const meta = await readFirebaseSessionMeta(db);
+      assertOrderSessionState(input, meta);
+
       const counterRef = ref(db, sessionPath("meta/lastNumber"));
       const counterResult = await runTransaction(
         counterRef,
@@ -228,6 +338,48 @@ function makeFirebaseOrderStore() {
       await set(orderRef, serverPayload);
 
       return normalizeOrder(optimisticPayload);
+    },
+
+    subscribeOrderMessages(orderId, onChange, onError) {
+      const { db } = requireFirebaseRuntime();
+      assertSessionKey();
+      assertValidFirebaseKey(orderId, "orderId");
+      const messagesRef = ref(db, sessionPath(`orderMessages/${orderId}`));
+      const unsubscribe = onValue(
+        messagesRef,
+        (snapshot) => {
+          const value = snapshot.val() || {};
+          onChange(sortMessages(Object.values(value).map(normalizeMessage)));
+        },
+        onError,
+      );
+
+      return () => unsubscribe?.();
+    },
+
+    async sendOrderMessage(orderId, text, sender = "guest") {
+      const safeText = cleanMessageText(text);
+      if (!safeText) throw new Error("Message vide.");
+      assertSessionKey();
+      assertValidFirebaseKey(orderId, "orderId");
+
+      const user = sender === "kitchen" ? await requireKitchenUser() : await ensureGuestAuth();
+      const { db } = requireFirebaseRuntime();
+      const messagesRef = ref(db, sessionPath(`orderMessages/${orderId}`));
+      const messageRef = push(messagesRef);
+      assertValidFirebaseKey(messageRef.key, "messageId");
+
+      const payload = {
+        id: messageRef.key,
+        orderId,
+        sender: sender === "kitchen" ? "kitchen" : "guest",
+        text: safeText,
+        authorUid: user.uid,
+        createdAtMs: serverTimestamp(),
+      };
+
+      await set(messageRef, payload);
+      return normalizeMessage({ ...payload, createdAtMs: Date.now() });
     },
 
     subscribeOrders(onChange, onError) {
@@ -292,6 +444,15 @@ function makeFirebaseOrderStore() {
     async archiveSession() {
       await archiveFirebaseSession();
     },
+
+    async setSessionPaused(paused) {
+      await setFirebaseSessionPaused(paused);
+    },
+
+    async setUnavailableItem(group, id, unavailable) {
+      validateUnavailableTarget(group, id);
+      await setFirebaseUnavailableItem(group, id, unavailable);
+    },
   };
 }
 
@@ -299,6 +460,9 @@ function makeLocalStore() {
   const ordersKey = `sarah-burger:${sessionId}:orders`;
   const counterKey = `sarah-burger:${sessionId}:counter`;
   const archiveKey = `sarah-burger:${sessionId}:archived`;
+  const pausedKey = `sarah-burger:${sessionId}:paused`;
+  const unavailableKey = `sarah-burger:${sessionId}:unavailable`;
+  const messagesKey = `sarah-burger:${sessionId}:messages`;
   const channel =
     typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(ordersKey);
 
@@ -314,6 +478,42 @@ function makeLocalStore() {
 
   function writeOrders(orders) {
     localStorage.setItem(ordersKey, JSON.stringify(sortOrders(orders)));
+    window.dispatchEvent(new CustomEvent(LOCAL_EVENT));
+    channel?.postMessage("changed");
+  }
+
+  function readUnavailable() {
+    try {
+      return JSON.parse(localStorage.getItem(unavailableKey) || "{}");
+    } catch {
+      return {};
+    }
+  }
+
+  function readLocalMeta() {
+    return normalizeSessionMeta({
+      archived: localStorage.getItem(archiveKey) === "yes",
+      paused: localStorage.getItem(pausedKey) === "yes",
+      unavailable: readUnavailable(),
+    });
+  }
+
+  function writeUnavailable(value) {
+    localStorage.setItem(unavailableKey, JSON.stringify(value));
+    window.dispatchEvent(new CustomEvent(LOCAL_EVENT));
+    channel?.postMessage("changed");
+  }
+
+  function readMessages() {
+    try {
+      return JSON.parse(localStorage.getItem(messagesKey) || "{}");
+    } catch {
+      return {};
+    }
+  }
+
+  function writeMessages(messages) {
+    localStorage.setItem(messagesKey, JSON.stringify(messages));
     window.dispatchEvent(new CustomEvent(LOCAL_EVENT));
     channel?.postMessage("changed");
   }
@@ -374,7 +574,7 @@ function makeLocalStore() {
     subscribeConnection: subscribeLocalConnection,
 
     subscribeSessionMeta(onChange) {
-      const handler = () => onChange({ archived: localStorage.getItem(archiveKey) === "yes" });
+      const handler = () => onChange(readLocalMeta());
       window.addEventListener(LOCAL_EVENT, handler);
       handler();
       return () => window.removeEventListener(LOCAL_EVENT, handler);
@@ -390,6 +590,8 @@ function makeLocalStore() {
       const existing = readOrders().find((order) => order.clientRequestId === clientRequestId);
       if (existing) return existing;
 
+      assertOrderSessionState(input, readLocalMeta());
+
       const order = {
         ...createOrderPayload({ ...input, clientRequestId }, nextNumber(), { uid: "local" }),
       };
@@ -399,6 +601,44 @@ function makeLocalStore() {
 
     subscribeOrders(onChange) {
       return subscribeLocal(onChange);
+    },
+
+    subscribeOrderMessages(orderId, onChange) {
+      assertValidFirebaseKey(orderId, "orderId");
+      const handler = () => {
+        const messages = readMessages()[orderId] || {};
+        onChange(sortMessages(Object.values(messages).map(normalizeMessage)));
+      };
+      window.addEventListener(LOCAL_EVENT, handler);
+      handler();
+      return () => window.removeEventListener(LOCAL_EVENT, handler);
+    },
+
+    async sendOrderMessage(orderId, text, sender = "guest") {
+      assertValidFirebaseKey(orderId, "orderId");
+      const safeText = cleanMessageText(text);
+      if (!safeText) throw new Error("Message vide.");
+
+      const order = readOrders().find((item) => item.id === orderId);
+      if (!order) throw new Error("Commande introuvable.");
+      if (order.status === "served" || order.status === "cancelled") {
+        throw new Error("Cette commande est terminee.");
+      }
+
+      const id = crypto.randomUUID?.() || `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      assertValidFirebaseKey(id, "messageId");
+      const message = normalizeMessage({
+        id,
+        orderId,
+        sender: sender === "kitchen" ? "kitchen" : "guest",
+        text: safeText,
+        authorUid: sender === "kitchen" ? "local-kitchen" : "local",
+        createdAtMs: Date.now(),
+      });
+      const messages = readMessages();
+      messages[orderId] = { ...(messages[orderId] || {}), [id]: message };
+      writeMessages(messages);
+      return message;
     },
 
     subscribeOrder(orderId, onChange) {
@@ -428,6 +668,18 @@ function makeLocalStore() {
     async archiveSession() {
       localStorage.setItem(archiveKey, "yes");
       window.dispatchEvent(new CustomEvent(LOCAL_EVENT));
+    },
+
+    async setSessionPaused(paused) {
+      localStorage.setItem(pausedKey, paused ? "yes" : "no");
+      window.dispatchEvent(new CustomEvent(LOCAL_EVENT));
+    },
+
+    async setUnavailableItem(group, id, unavailable) {
+      validateUnavailableTarget(group, id);
+      const current = readUnavailable();
+      current[group] = { ...(current[group] || {}), [id]: unavailable === true };
+      writeUnavailable(current);
     },
   };
 }
