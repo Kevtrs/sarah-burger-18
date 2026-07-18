@@ -1006,6 +1006,27 @@ function StatusPill({ status }) {
   return <span className={`status-pill status-${current.color}`}>{current.label}</span>;
 }
 
+function SelectedItemsRow({ toppings: toppingIds, sauces: sauceIds, nachos, compact }) {
+  const items = [
+    ...toppings.filter((item) => toppingIds?.includes(item.id)),
+    ...sauces.filter((item) => sauceIds?.includes(item.id)),
+    ...(nachos ? [nachosOption] : []),
+  ];
+
+  if (!items.length) return null;
+
+  return (
+    <div className={`selected-items-row ${compact ? "selected-items-row-compact" : ""}`}>
+      {items.map((item) => (
+        <div className="selected-item-chip" key={item.id}>
+          <img src={assetPath(item.asset)} alt={item.label} />
+          <span>{item.shortLabel || item.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SingleDoneScreen({ entry, readyAlert }) {
   const isReady = entry.lastStatus === "ready";
 
@@ -1037,6 +1058,7 @@ function SingleDoneScreen({ entry, readyAlert }) {
         <strong>#{entry.number}</strong>
         <small>{entry.guestName}</small>
       </div>
+      <SelectedItemsRow toppings={entry.toppings} sauces={entry.sauces} nachos={entry.nachos} />
       <StatusPill status={entry.lastStatus} />
       {isReady && <InlineNotice tone="success">Ta commande est prête !</InlineNotice>}
       <ReadyAlertPanel readyAlert={readyAlert} anyReady={isReady} />
@@ -1062,9 +1084,12 @@ function GroupDoneScreen({ orders, readyAlert }) {
           const status = statuses[item.lastStatus] || statuses.received;
           return (
             <li key={item.orderId} className={`group-ticket-item ticket-${status.color}`}>
-              <span className="group-ticket-number">#{item.number}</span>
-              <span className="group-ticket-name">{item.guestName}</span>
-              <StatusPill status={item.lastStatus} />
+              <div className="group-ticket-item__main">
+                <span className="group-ticket-number">#{item.number}</span>
+                <span className="group-ticket-name">{item.guestName}</span>
+                <StatusPill status={item.lastStatus} />
+              </div>
+              <SelectedItemsRow toppings={item.toppings} sauces={item.sauces} nachos={item.nachos} compact />
             </li>
           );
         })}

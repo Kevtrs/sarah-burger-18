@@ -21,6 +21,9 @@ function readStoredAlert() {
         lastStatus: typeof item.lastStatus === "string" ? item.lastStatus : "received",
         number: Number(item.number || 0),
         readyNotified: item.readyNotified === true,
+        toppings: Array.isArray(item.toppings) ? item.toppings : [],
+        sauces: Array.isArray(item.sauces) ? item.sauces : [],
+        nachos: item.nachos === true,
       }));
 
     if (!orders.length) return null;
@@ -107,6 +110,9 @@ export function useReadyOrderAlert(store) {
           lastStatus: order.status || existing?.lastStatus || "received",
           number: Number(order.number || existing?.number || 0),
           readyNotified: existing?.readyNotified === true,
+          toppings: Array.isArray(order.toppings) ? order.toppings : existing?.toppings || [],
+          sauces: Array.isArray(order.sauces) ? order.sauces : existing?.sauces || [],
+          nachos: order.nachos ?? existing?.nachos ?? false,
         };
 
         previousStatusRef.current.set(order.id, entry.lastStatus);

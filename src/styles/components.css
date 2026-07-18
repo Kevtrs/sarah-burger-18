@@ -918,16 +918,21 @@
 }
 
 .group-ticket-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  display: grid;
+  gap: 6px;
   padding: 10px 12px;
   border: var(--border-standard);
   border-left-width: 8px;
   border-radius: var(--radius);
   background: white;
   box-shadow: var(--shadow-small);
+}
+
+.group-ticket-item__main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .group-ticket-number {
@@ -940,6 +945,58 @@
   min-width: 0;
   overflow-wrap: anywhere;
   font-weight: 1000;
+}
+
+.selected-items-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 2px 0;
+}
+
+.selected-item-chip {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  width: 58px;
+}
+
+.selected-item-chip img {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  filter: drop-shadow(1px 2px 0 rgba(23, 18, 15, 0.18));
+}
+
+.selected-item-chip span {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--color-muted);
+  font-size: 0.62rem;
+  font-weight: 900;
+  line-height: 1.1;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selected-items-row-compact {
+  justify-content: flex-start;
+  gap: 6px;
+}
+
+.selected-items-row-compact .selected-item-chip {
+  width: 32px;
+}
+
+.selected-items-row-compact .selected-item-chip img {
+  width: 32px;
+  height: 32px;
+}
+
+.selected-items-row-compact .selected-item-chip span {
+  display: none;
 }
 
 .modal-backdrop {
