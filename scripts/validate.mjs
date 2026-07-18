@@ -189,7 +189,10 @@ async function submitOrderFromPage(page, guestName, toppingIndex, sauceIndex) {
   await page.locator(".toppings-grid button.choice-card").first().waitFor();
   await page.locator(".toppings-grid button.choice-card").nth(toppingIndex).click();
   await page.locator("button.sauce-card").nth(sauceIndex).click();
-  await page.getByRole("button", { name: "Continuer" }).click();
+  await page.getByRole("button", { name: "Choisir les nachos" }).click();
+  await page.locator(".nachos-decision-grid").waitFor();
+  await page.getByRole("button", { name: /Non merci/ }).click();
+  await page.getByRole("button", { name: "Voir le ticket" }).click();
   await dismissGroupPromptIfVisible(page);
   await page.getByRole("button", { name: "Envoyer" }).click();
   await page.locator(".order-number").waitFor();
@@ -305,10 +308,13 @@ async function run() {
   await sauceCards.nth(2).click();
   await sauceCards.nth(6).click();
 
-  await page.getByRole("button", { name: "Continuer" }).click();
+  await page.getByRole("button", { name: "Choisir les nachos" }).click();
+  await page.locator(".nachos-decision-grid").waitFor();
+  await page.getByRole("button", { name: /Oui, barquette/ }).click();
+  await page.getByRole("button", { name: "Voir le ticket" }).click();
   await dismissGroupPromptIfVisible(page);
   const reviewText = await page.locator(".summary-list").innerText();
-  if (!reviewText.includes("Giant") || !reviewText.includes("Moutarde")) {
+  if (!reviewText.includes("Giant") || !reviewText.includes("Moutarde") || !reviewText.includes("Nachos")) {
     throw new Error(`Multiple sauces are missing from the review: ${reviewText}`);
   }
   await page.getByRole("button", { name: "Envoyer" }).click();
@@ -561,6 +567,10 @@ async function run() {
       viewportPage.locator("button.sauce-card").nth(6),
       `Moutarde ${viewport.name}`,
     );
+    await viewportPage.getByRole("button", { name: "Choisir les nachos" }).click();
+    const stickyNachos = await checkStickyActions(viewportPage, `${viewport.name} nachos`);
+    await viewportPage.locator(".nachos-decision-grid").waitFor();
+    await viewportPage.getByRole("button", { name: /Non merci/ }).click();
     await openKitchen(viewportPage);
     const kitchenMetrics = await checkOverflow(viewportPage);
     if (kitchenMetrics.overflowing) {
@@ -570,7 +580,7 @@ async function run() {
       name: viewport.name,
       orderMetrics,
       kitchenMetrics,
-      stickyMetrics: { identity: stickyIdentity, customize: stickyCustomize },
+      stickyMetrics: { identity: stickyIdentity, customize: stickyCustomize, nachos: stickyNachos },
       mascotMetrics: { onions: viewportOnions, spicy: viewportSpicy, mustard: viewportMustard },
     });
     await context.close();

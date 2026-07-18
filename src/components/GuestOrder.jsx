@@ -28,8 +28,8 @@ import { useOrderQueue } from "../hooks/useOrderQueue";
 import { usePickupAcks } from "../hooks/usePickupAcks";
 import { OrderMessages } from "./OrderMessages";
 
-const steps = ["identity", "customize", "review", "done"];
-const progressLabels = ["Prénom", "Burger", "Validation"];
+const steps = ["identity", "customize", "nachos", "review", "done"];
+const progressLabels = ["Prénom", "Burger", "Nachos", "Ticket"];
 const introStorageKey = "sarah-burger-intro-seen";
 const confettiColors = ["#e93668", "#f4c33f", "#d64023", "#1f6ec7", "#fffaf0"];
 const confettiPieces = Array.from({ length: 24 }, (_, index) => {
@@ -129,6 +129,7 @@ export function GuestOrder({ store }) {
   const [selectedToppings, setSelectedToppings] = useState([]);
   const [selectedSauces, setSelectedSauces] = useState([]);
   const [wantsNachos, setWantsNachos] = useState(false);
+  const [hasAnsweredNachos, setHasAnsweredNachos] = useState(false);
   const [cart, setCart] = useState([]);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -194,6 +195,7 @@ export function GuestOrder({ store }) {
     );
     if (isUnavailable(sessionMeta, "extras", nachosOption.id)) {
       setWantsNachos(false);
+      setHasAnsweredNachos(true);
     }
     setCart((current) =>
       current.map((item) => ({
@@ -252,21 +254,37 @@ export function GuestOrder({ store }) {
     });
   }
 
-  function toggleNachos() {
-    if (isUnavailable(sessionMeta, "extras", nachosOption.id)) return;
-    setWantsNachos((current) => !current);
+  function chooseNachos(value) {
+    if (value && isUnavailable(sessionMeta, "extras", nachosOption.id)) return;
+    setWantsNachos(value);
+    setHasAnsweredNachos(true);
+    setError("");
   }
 
   function canGoNext() {
     if (step === "identity") return guestName.trim().length > 0;
     if (step === "customize") return selectedSauces.length > 0;
+    if (step === "nachos") return hasAnsweredNachos || isUnavailable(sessionMeta, "extras", nachosOption.id);
     return true;
+  }
+
+  function nextErrorMessage() {
+    if (step === "identity") return "Ajoute ton prénom avant de continuer.";
+    if (step === "customize") return "Choisis une sauce ou Sans sauce.";
+    if (step === "nachos") return "Choisis Oui ou Non pour la barquette de nachos.";
+    return "";
+  }
+
+  function nextButtonLabel() {
+    if (step === "customize") return "Choisir les nachos";
+    if (step === "nachos") return "Voir le ticket";
+    return "Continuer";
   }
 
   function goNext() {
     setError("");
     if (!canGoNext()) {
-      setError(step === "identity" ? "Ajoute ton prénom avant de continuer." : "Choisis une sauce ou Sans sauce.");
+      setError(nextErrorMessage());
       return;
     }
     const index = steps.indexOf(step);
@@ -415,6 +433,7 @@ export function GuestOrder({ store }) {
         setSelectedToppings([]);
         setSelectedSauces([]);
         setWantsNachos(false);
+        setHasAnsweredNachos(false);
         setCart([]);
         setError("");
         setIsSubmitting(false);
@@ -533,10 +552,20 @@ export function GuestOrder({ store }) {
             <h1 id="customize-title">Compose ton burger</h1>
           </div>
 
-          <NachosOption selected={wantsNachos} onToggle={toggleNachos} unavailable={sessionMeta.unavailable} />
           <ToppingsGrid selectedToppings={selectedToppings} onToggle={toggleTopping} unavailable={sessionMeta.unavailable} />
           <SaucesGrid selectedSauces={selectedSauces} onToggle={toggleSauce} unavailable={sessionMeta.unavailable} />
         </section>
+      )}
+
+      {step === "nachos" && (
+        <NachosStep
+          guestName={trimmedName}
+          toppingLabels={selectedToppingLabels}
+          sauceLabels={selectedSauceLabels}
+          selectedChoice={hasAnsweredNachos ? (wantsNachos ? "yes" : "no") : null}
+          unavailable={sessionMeta.unavailable}
+          onChoose={chooseNachos}
+        />
       )}
 
       {step === "review" && (
@@ -643,7 +672,7 @@ export function GuestOrder({ store }) {
           <button className="primary-action cta-button" type="button" onClick={goNext}>
             <span className="cta-button__base" aria-hidden="true" />
             <span className="cta-button__shine" aria-hidden="true" />
-            Continuer
+            {nextButtonLabel()}
           </button>
         )}
       </div>
@@ -867,6 +896,84 @@ function NachosOption({ selected, onToggle, unavailable = {} }) {
         </button>
       </div>
     </div>
+  );
+}
+
+function NachosStep({ guestName, toppingLabels, sauceLabels, selectedChoice, onChoose, unavailable = {} }) {
+  const blocked = unavailable.extras?.[nachosOption.id] === true;
+  const yesSelected = selectedChoice === "yes";
+  const noSelected = selectedChoice === "no" || blocked;
+  const toppingsText = toppingLabels.length ? toppingLabels.join(", ") : "Sans ajout";
+  const saucesText = sauceLabels.length ? sauceLabels.join(", ") : noSauceOption.label;
+
+  return (
+    <section className="order-screen nachos-layout" aria-labelledby="nachos-title">
+      <div className="section-heading nachos-heading">
+        <p className="eyebrow">Avant le ticket</p>
+        <h1 id="nachos-title">Barquette de nachos ?</h1>
+        <p className="muted">Dernière question, puis ton ticket part au stand.</p>
+      </div>
+
+      <div className="nachos-recap">
+        <strong>{guestName}</strong>
+        <span>
+          {toppingsText} · {saucesText}
+        </span>
+      </div>
+
+      <div className="nachos-spotlight" aria-hidden="true">
+        <img src={assetPath(nachosOption.asset)} alt="" />
+        <span>+ extra</span>
+      </div>
+
+      <div className="nachos-decision-grid" role="group" aria-label="Choix de barquette de nachos">
+        <button
+          className={`option-card nachos-choice-card choice-gold mascot-nachos ${yesSelected ? "selected" : ""} ${blocked ? "is-unavailable" : ""}`}
+          type="button"
+          data-selected={yesSelected}
+          data-unavailable={blocked}
+          disabled={blocked}
+          onClick={() => onChoose(true)}
+          aria-pressed={yesSelected}
+        >
+          <span className="option-card__shadow" aria-hidden="true" />
+          <span className="option-card__accent" aria-hidden="true" />
+          <span className="option-card__art choice-art">
+            <img src={assetPath(nachosOption.asset)} alt="" aria-hidden="true" />
+          </span>
+          <span className="option-card__content choice-copy">
+            <strong>Oui, barquette</strong>
+            <small>{blocked ? "Epuise pour le moment" : nachosOption.label}</small>
+          </span>
+          <span className="option-card__control choice-check" aria-hidden="true">
+            <Check />
+          </span>
+        </button>
+
+        <button
+          className={`option-card nachos-choice-card choice-blue ${noSelected ? "selected" : ""}`}
+          type="button"
+          data-selected={noSelected}
+          onClick={() => onChoose(false)}
+          aria-pressed={noSelected}
+        >
+          <span className="option-card__shadow" aria-hidden="true" />
+          <span className="option-card__accent" aria-hidden="true" />
+          <span className="nachos-no-icon" aria-hidden="true">
+            <X />
+          </span>
+          <span className="option-card__content choice-copy">
+            <strong>Non merci</strong>
+            <small>Juste le burger</small>
+          </span>
+          <span className="option-card__control choice-check" aria-hidden="true">
+            <Check />
+          </span>
+        </button>
+      </div>
+
+      {blocked && <InlineNotice tone="warning">Les nachos sont épuisés pour le moment.</InlineNotice>}
+    </section>
   );
 }
 

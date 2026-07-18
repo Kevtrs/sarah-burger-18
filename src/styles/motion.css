@@ -247,21 +247,23 @@
 }
 
 html[data-transition="identity-to-customize"]::view-transition-old(order-card),
-html[data-transition="customize-to-review"]::view-transition-old(order-card),
+html[data-transition="customize-to-nachos"]::view-transition-old(order-card),
+html[data-transition="nachos-to-review"]::view-transition-old(order-card),
 html[data-transition="review-to-done"]::view-transition-old(order-card) {
   animation-name: stage-slide-out-left;
 }
 
 html[data-transition="identity-to-customize"]::view-transition-new(order-card),
-html[data-transition="customize-to-review"]::view-transition-new(order-card) {
+html[data-transition="customize-to-nachos"]::view-transition-new(order-card),
+html[data-transition="nachos-to-review"]::view-transition-new(order-card) {
   animation-name: stage-slide-in-right;
 }
 
-html[data-transition="customize-to-review"]::view-transition-old(order-card) {
+html[data-transition="nachos-to-review"]::view-transition-old(order-card) {
   animation-name: wrap-fold-out;
 }
 
-html[data-transition="customize-to-review"]::view-transition-new(order-ticket) {
+html[data-transition="nachos-to-review"]::view-transition-new(order-ticket) {
   animation-name: ticket-reveal;
   animation-duration: 600ms;
 }
@@ -278,13 +280,15 @@ html[data-transition="review-to-done"]::view-transition-new(order-number) {
 
 html[data-transition$="-to-identity"]::view-transition-old(order-card),
 html[data-transition="customize-to-identity"]::view-transition-old(order-card),
-html[data-transition="review-to-customize"]::view-transition-old(order-card) {
+html[data-transition="nachos-to-customize"]::view-transition-old(order-card),
+html[data-transition="review-to-nachos"]::view-transition-old(order-card) {
   animation-name: stage-slide-out-right;
 }
 
 html[data-transition$="-to-identity"]::view-transition-new(order-card),
 html[data-transition="customize-to-identity"]::view-transition-new(order-card),
-html[data-transition="review-to-customize"]::view-transition-new(order-card) {
+html[data-transition="nachos-to-customize"]::view-transition-new(order-card),
+html[data-transition="review-to-nachos"]::view-transition-new(order-card) {
   animation-name: stage-slide-in-left;
 }
 
