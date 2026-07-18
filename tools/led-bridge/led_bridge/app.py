@@ -35,6 +35,7 @@ class ConfigState:
         self._config = initial_config
         self._mtime = self._read_mtime()
         self._last_check = 0.0
+        self._revision = 0
         self._lock = threading.Lock()
 
     def _read_mtime(self) -> float:
@@ -46,6 +47,11 @@ class ConfigState:
     def get(self):
         with self._lock:
             return self._config
+
+    @property
+    def revision(self) -> int:
+        with self._lock:
+            return self._revision
 
     def reload_if_changed(self):
         with self._lock:
@@ -67,6 +73,7 @@ class ConfigState:
 
             self._config = next_config
             self._mtime = mtime
+            self._revision += 1
             log(
                 "Config rechargee: "
                 f"stand_open={next_config.stand_open}, "
@@ -113,6 +120,10 @@ def _refresh_config(config_source):
     if callable(reload_if_changed):
         return reload_if_changed()
     return config_source
+
+
+def _config_revision(config_source) -> int:
+    return getattr(config_source, "revision", 0)
 
 
 def display_event(panel: PixelPanel, generated_dir: Path, event, *, high_contrast: bool = False) -> None:
@@ -436,9 +447,16 @@ def run_worker(
     last_event = None
     last_event_at = None
     pending_event = None
+    last_config_revision = _config_revision(config)
     while not stop_event.is_set():
         current_config = _refresh_config(config)
         high_contrast = _config_value(current_config, "high_contrast", False)
+        current_revision = _config_revision(config)
+        config_changed = current_revision != last_config_revision
+        if config_changed:
+            last_config_revision = current_revision
+            idle_sent = False
+            last_rotation = 0.0
 
         if not _config_value(current_config, "stand_open", True):
             if not closed_sent:
@@ -466,6 +484,13 @@ def run_worker(
                 _show_current_state(panel, current_config, active_events, status_since, page=active_page)
             except Exception as exc:
                 log(f"Reouverture stand: affichage impossible: {exc}")
+
+        if config_changed and active_events:
+            try:
+                _show_current_state(panel, current_config, active_events, status_since, page=active_page)
+                last_rotation = time.monotonic()
+            except Exception as exc:
+                log(f"Reaffichage apres config impossible: {exc}")
 
         event = pending_event or queue.next_event(timeout=2)
         pending_event = None

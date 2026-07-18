@@ -7,8 +7,10 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from led_bridge.app import run_worker
+from led_bridge.app import ConfigState, run_worker
+from led_bridge.config import load_config
 from led_bridge.models import validate_order_event
+from led_bridge.queueing import DisplayQueue
 
 
 def event(order_id: str, number: int, status: str):
@@ -187,6 +189,53 @@ class WorkerDisplayTest(unittest.TestCase):
 
         self.assertIn("#39", log_content)
         self.assertIn("received", log_content)
+
+    def test_config_reload_redraws_active_state(self):
+        stop_event = threading.Event()
+        panel = FakePanel()
+        queue = DisplayQueue()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / "config.json"
+            config_path.write_text(
+                """
+                {
+                  "firebase": {"database_url": "https://example.firebaseio.com"},
+                  "panel": {
+                    "bluetooth_address": "AA:BB:CC:DD:EE:FF",
+                    "status_display_seconds": 0
+                  },
+                  "behavior": {"config_reload_seconds": 0.5}
+                }
+                """,
+                encoding="utf-8",
+            )
+            config_state = ConfigState(config_path, load_config(config_path))
+            worker = threading.Thread(target=run_worker, args=(config_state, queue, panel, stop_event))
+            worker.start()
+
+            queue.enqueue(event("order-39", 39, "received"))
+            time.sleep(0.5)
+            config_path.write_text(
+                """
+                {
+                  "high_contrast": true,
+                  "firebase": {"database_url": "https://example.firebaseio.com"},
+                  "panel": {
+                    "bluetooth_address": "AA:BB:CC:DD:EE:FF",
+                    "status_display_seconds": 0
+                  },
+                  "behavior": {"config_reload_seconds": 0.5}
+                }
+                """,
+                encoding="utf-8",
+            )
+            time.sleep(2.4)
+            stop_event.set()
+            worker.join(timeout=2)
+
+        sent_names = [path.name for path in panel.sent]
+        self.assertGreaterEqual(sent_names.count("order-order-39-received.png"), 2)
 
     def test_five_active_orders_use_rush_summary(self):
         stop_event = threading.Event()
