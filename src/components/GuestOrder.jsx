@@ -33,6 +33,7 @@ const steps = ["identity", "customize", "nachos", "review", "done"];
 const progressLabels = ["Prénom", "Burger", "Nachos", "Ticket"];
 const introStorageKey = "sarah-burger-intro-seen";
 const sionsContractStoragePrefix = "sarah-burger-sions-contract-signed-v1";
+const veherCeremonyStoragePrefix = "sarah-burger-veher-om-ceremony-seen-v1";
 const confettiColors = ["#e93668", "#f4c33f", "#d64023", "#1f6ec7", "#fffaf0"];
 const confettiPieces = Array.from({ length: 24 }, (_, index) => {
   const side = index % 2 === 0 ? -1 : 1;
@@ -143,6 +144,15 @@ function hasSignedSionsContract(orderId) {
   return window.localStorage.getItem(sionsContractStorageKey(orderId)) === "yes";
 }
 
+function veherCeremonyStorageKey(orderId) {
+  return `${veherCeremonyStoragePrefix}:${orderId}`;
+}
+
+function hasSeenVeherCeremony(orderId) {
+  if (typeof window === "undefined" || !orderId) return false;
+  return window.localStorage.getItem(veherCeremonyStorageKey(orderId)) === "yes";
+}
+
 export function GuestOrder({ store }) {
   const [step, setStep] = useState("identity");
   const [guestName, setGuestName] = useState("");
@@ -164,6 +174,7 @@ export function GuestOrder({ store }) {
   const [isAddBurgerOpen, setIsAddBurgerOpen] = useState(false);
   const [showGroupPrompt, setShowGroupPrompt] = useState(false);
   const [sionsContractOrder, setSionsContractOrder] = useState(null);
+  const [veherCeremonyOrder, setVeherCeremonyOrder] = useState(null);
   const submitTimersRef = useRef([]);
   const clientRequestIdRef = useRef(makeClientRequestId());
   const hasResumedOrderRef = useRef(false);
@@ -416,6 +427,9 @@ export function GuestOrder({ store }) {
       const prankOrder = createdOrders.find(
         (order) => isUncleCodName(order.guestName) && !hasSignedSionsContract(order.id),
       );
+      const omOrder = createdOrders.find(
+        (order) => isVeherOmName(order.guestName) && !hasSeenVeherCeremony(order.id),
+      );
 
       setCart([]);
       setSubmitState("success");
@@ -430,6 +444,10 @@ export function GuestOrder({ store }) {
         setIsSubmitting(false);
         setSubmitState("idle");
         if (prankOrder) setSionsContractOrder(prankOrder);
+        if (omOrder) {
+          const ceremonyTimer = window.setTimeout(() => setVeherCeremonyOrder(omOrder), 820);
+          submitTimersRef.current.push(ceremonyTimer);
+        }
         window.scrollTo({ top: 0, behavior: "auto" });
       }, 760);
 
@@ -572,6 +590,15 @@ export function GuestOrder({ store }) {
                 ))}
               </ul>
             </div>
+            {isVeherOmName(guestName) && (
+              <div className="veher-identity-badge" aria-live="polite">
+                <img src={assetPath("om-logo.png")} alt="" aria-hidden="true" />
+                <div>
+                  <strong>Ticket #13 réservé</strong>
+                  <span>Droit au but du cheddar.</span>
+                </div>
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -650,6 +677,16 @@ export function GuestOrder({ store }) {
           onSign={() => {
             window.localStorage.setItem(sionsContractStorageKey(sionsContractOrder.id), "yes");
             setSionsContractOrder(null);
+          }}
+        />
+      )}
+
+      {veherCeremonyOrder && (
+        <VeherOmCeremonyModal
+          order={veherCeremonyOrder}
+          onClose={() => {
+            window.localStorage.setItem(veherCeremonyStorageKey(veherCeremonyOrder.id), "yes");
+            setVeherCeremonyOrder(null);
           }}
         />
       )}
@@ -1052,6 +1089,41 @@ function SionsContractModal({ order, onSign }) {
   );
 }
 
+function VeherOmCeremonyModal({ order, onClose }) {
+  return (
+    <div className="modal-backdrop veher-ceremony-backdrop" role="presentation">
+      <section
+        className="veher-ceremony-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="veher-ceremony-title"
+      >
+        <span className="veher-ceremony-light light-left" aria-hidden="true" />
+        <span className="veher-ceremony-light light-right" aria-hidden="true" />
+        <span className="veher-ceremony-noise" aria-hidden="true" />
+
+        <div className="veher-ceremony-crest" aria-hidden="true">
+          <img src={assetPath("om-logo.png")} alt="" />
+          <span>#13</span>
+        </div>
+
+        <div className="veher-ceremony-copy">
+          <p className="eyebrow">Droit au but</p>
+          <h2 id="veher-ceremony-title">VEHER</h2>
+          <p>Commande #{order.number} verrouillée. Le Vélodrome du cheddar vient de s&apos;allumer.</p>
+          <small>Contrat spécial beau-père : aucune autre commande ne touche au numéro 13.</small>
+        </div>
+
+        <button className="primary-action cta-button veher-ceremony-sign" type="button" onClick={onClose} autoFocus>
+          <span className="cta-button__base" aria-hidden="true" />
+          <span className="cta-button__shine" aria-hidden="true" />
+          Droit au but
+        </button>
+      </section>
+    </div>
+  );
+}
+
 function GroupOrderPrompt({ onAddBurger, onDismiss }) {
   return (
     <div className="modal-backdrop" role="presentation" onClick={onDismiss}>
@@ -1346,6 +1418,20 @@ function SingleDoneScreen({ entry, orderQueue, pickupAcks, readyAlert, store }) 
   const isSarahVip = isSarahVipName(entry.guestName);
   const isUncleCod = isUncleCodName(entry.guestName);
   const isVeherOm = isVeherOmName(entry.guestName);
+  const doneTitle = isVeherOm
+    ? isReady
+      ? "Veher, direction le Vélodrome !"
+      : "Veher entre au Sarah Burger"
+    : isReady
+      ? "Ta commande est prête !"
+      : "Commande envoyée";
+  const doneNote = isVeherOm
+    ? isReady
+      ? "Commande #13 prête. Droit au but, viens récupérer ton burger."
+      : "Ticket #13 réservé. Le burger passe par le virage cheddar."
+    : isReady
+      ? "Viens la récupérer au stand Sarah Burger."
+      : "Ta commande entre en cuisine. Garde bien ton numéro.";
 
   return (
     <section
@@ -1361,23 +1447,20 @@ function SingleDoneScreen({ entry, orderQueue, pickupAcks, readyAlert, store }) 
     >
       <div className="success-copy">
         <p className="eyebrow">Ticket validé</p>
-        <h1 id="done-title">{isReady ? "Ta commande est prête !" : "Commande envoyée"}</h1>
+        <h1 id="done-title">{doneTitle}</h1>
       </div>
       <div className="number-stage success-number-wrap" aria-label={`Numéro de commande ${entry.number}`}>
         <span className="success-number__burst" aria-hidden="true" />
         <img className="success-mascot success-mascot-left" src={assetPath("bigmac.svg")} alt="" aria-hidden="true" />
         <span className="order-number success-number">#{entry.number}</span>
         <img className="success-mascot success-mascot-right" src={assetPath("onions.svg")} alt="" aria-hidden="true" />
+        {isVeherOm && <img className="success-om-crest" src={assetPath("om-logo.png")} alt="" aria-hidden="true" />}
       </div>
-      <p className="success-note muted">
-        {isReady
-          ? "Viens la récupérer au stand Sarah Burger."
-          : "Ta commande entre en cuisine. Garde bien ton numéro."}
-      </p>
+      <p className="success-note muted">{doneNote}</p>
       <OrderQueueCard info={queueInfo} />
       <FunNameNotice guestName={entry.guestName} orderNumber={entry.number} />
-      <div className="success-ticket" aria-hidden="true">
-        <span>SARAH BURGER</span>
+      <div className={`success-ticket ${isVeherOm ? "success-ticket-veher" : ""}`} aria-hidden="true">
+        <span>{isVeherOm ? "DROIT AU BUT" : "SARAH BURGER"}</span>
         <strong>#{entry.number}</strong>
         <small>{entry.guestName}</small>
       </div>

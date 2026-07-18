@@ -88,6 +88,41 @@
     0 0 0 14px rgba(191, 144, 86, 0.42);
 }
 
+.veher-om-scene .success-copy .eyebrow {
+  color: #0077a6;
+}
+
+.veher-om-scene .success-copy h1 {
+  color: #0077a6;
+  text-shadow:
+    0 3px 0 rgba(255, 250, 240, 0.9),
+    0 0 18px rgba(0, 159, 218, 0.24);
+}
+
+.veher-om-scene .success-mascot {
+  display: none;
+}
+
+.success-om-crest {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  z-index: 5;
+  width: 58px;
+  height: 58px;
+  padding: 7px;
+  border: var(--border-standard);
+  border-color: #009fda;
+  border-radius: 50%;
+  background: rgba(255, 250, 240, 0.98);
+  object-fit: contain;
+  box-shadow:
+    var(--shadow-small),
+    0 0 0 4px rgba(191, 144, 86, 0.25),
+    0 0 24px rgba(0, 159, 218, 0.34);
+  animation: om-crest-pop 720ms var(--ease-pop) 360ms both;
+}
+
 .success-copy h1 {
   margin-bottom: 0;
   font-size: 2.24rem;
@@ -195,6 +230,31 @@
 .success-ticket small {
   color: var(--color-muted);
   font-weight: 1000;
+}
+
+.success-ticket-veher {
+  border-color: #009fda;
+  background:
+    linear-gradient(112deg, white 0 62%, rgba(223, 242, 255, 0.96) 62%),
+    white;
+  box-shadow:
+    var(--shadow-small),
+    0 0 0 4px rgba(0, 159, 218, 0.14);
+}
+
+.success-ticket-veher span {
+  color: #0077a6;
+}
+
+.success-ticket-veher strong {
+  color: #009fda;
+  text-shadow:
+    0 2px 0 rgba(23, 18, 15, 0.18),
+    0 0 10px rgba(0, 159, 218, 0.28);
+}
+
+.success-ticket-veher small {
+  color: #8a6232;
 }
 
 .fun-name-card {
@@ -459,6 +519,193 @@
   background: var(--color-yellow);
   color: var(--color-ink);
   font-size: 1rem;
+}
+
+.veher-ceremony-backdrop {
+  z-index: 1250;
+  align-items: center;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 50% 110%, rgba(0, 159, 218, 0.42), transparent 46%),
+    radial-gradient(circle at 16% 10%, rgba(191, 144, 86, 0.34), transparent 34%),
+    rgba(4, 17, 27, 0.88);
+}
+
+.veher-ceremony-modal {
+  position: relative;
+  display: grid;
+  width: min(450px, 100%);
+  gap: 14px;
+  justify-items: center;
+  padding: 18px 16px 16px;
+  border: 4px solid #009fda;
+  border-radius: var(--radius);
+  background:
+    linear-gradient(180deg, rgba(2, 38, 58, 0.98), rgba(4, 20, 34, 0.98)),
+    #052034;
+  color: white;
+  box-shadow:
+    8px 8px 0 var(--color-ink),
+    0 0 0 5px rgba(255, 250, 240, 0.9),
+    0 0 42px rgba(0, 159, 218, 0.64);
+  overflow: hidden;
+  text-align: center;
+  animation: veher-stadium-in 620ms var(--ease-pop) both;
+}
+
+.veher-ceremony-modal::before,
+.veher-ceremony-modal::after,
+.veher-ceremony-light,
+.veher-ceremony-noise {
+  position: absolute;
+  pointer-events: none;
+  content: "";
+}
+
+.veher-ceremony-modal::before {
+  inset: 0;
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent),
+    repeating-linear-gradient(0deg, transparent 0 9px, rgba(255, 255, 255, 0.07) 9px 10px);
+  mix-blend-mode: screen;
+}
+
+.veher-ceremony-modal::after {
+  inset: auto 0 0;
+  height: 72px;
+  background:
+    radial-gradient(ellipse at 50% 100%, rgba(0, 159, 218, 0.48), transparent 70%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.08) 0 2px, transparent 2px 12px);
+  opacity: 0.9;
+}
+
+.veher-ceremony-light {
+  top: -34%;
+  width: 118px;
+  height: 132%;
+  background: linear-gradient(180deg, rgba(255, 250, 240, 0.52), rgba(0, 159, 218, 0.04));
+  filter: blur(2px);
+  mix-blend-mode: screen;
+  transform-origin: top center;
+  opacity: 0.7;
+}
+
+.veher-ceremony-light.light-left {
+  left: 0;
+  transform: rotate(28deg);
+  animation: veher-spotlight-left 2.8s ease-in-out 300ms 2;
+}
+
+.veher-ceremony-light.light-right {
+  right: 0;
+  transform: rotate(-28deg);
+  animation: veher-spotlight-right 2.8s ease-in-out 300ms 2;
+}
+
+.veher-ceremony-noise {
+  inset: 10px;
+  border: 2px dashed rgba(255, 250, 240, 0.24);
+}
+
+.veher-ceremony-crest,
+.veher-ceremony-copy,
+.veher-ceremony-sign {
+  position: relative;
+  z-index: 1;
+}
+
+.veher-ceremony-crest {
+  display: grid;
+  width: 142px;
+  height: 142px;
+  place-items: center;
+  border: 4px solid rgba(255, 250, 240, 0.95);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(255, 250, 240, 0.98) 0 46%, rgba(223, 242, 255, 0.9) 47%),
+    white;
+  box-shadow:
+    0 0 0 8px rgba(0, 159, 218, 0.34),
+    0 0 0 14px rgba(191, 144, 86, 0.22),
+    0 16px 24px rgba(0, 0, 0, 0.34);
+  animation: veher-crest-kickoff 760ms var(--ease-pop) 180ms both;
+}
+
+.veher-ceremony-crest img {
+  width: 92px;
+  height: 92px;
+  object-fit: contain;
+}
+
+.veher-ceremony-crest span {
+  position: absolute;
+  right: -8px;
+  bottom: 10px;
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border: var(--border-standard);
+  border-color: var(--color-ink);
+  border-radius: 50%;
+  background: #bf9056;
+  color: white;
+  box-shadow: var(--shadow-small);
+  font-size: 1.05rem;
+  font-weight: 1000;
+}
+
+.veher-ceremony-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.veher-ceremony-copy .eyebrow {
+  color: #bf9056;
+}
+
+.veher-ceremony-copy h2 {
+  margin: 0;
+  color: white;
+  font-size: clamp(3.2rem, 16vw, 5.4rem);
+  letter-spacing: 0;
+  text-shadow:
+    0 4px 0 var(--color-ink),
+    0 0 18px rgba(0, 159, 218, 0.84),
+    0 0 32px rgba(255, 250, 240, 0.38);
+  animation: veher-title-pulse 1.35s ease-in-out 720ms 2;
+}
+
+.veher-ceremony-copy p,
+.veher-ceremony-copy small {
+  margin: 0;
+  color: rgba(255, 250, 240, 0.94);
+  font-weight: 1000;
+  overflow-wrap: anywhere;
+}
+
+.veher-ceremony-copy p {
+  font-size: 1.03rem;
+  line-height: 1.18;
+}
+
+.veher-ceremony-copy small {
+  max-width: 36ch;
+  color: rgba(255, 250, 240, 0.72);
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+.veher-ceremony-sign {
+  width: 100%;
+  min-height: 58px;
+  justify-content: center;
+  background: #009fda;
+  color: white;
+  font-size: 1.02rem;
+  box-shadow:
+    var(--shadow-medium),
+    0 0 0 4px rgba(191, 144, 86, 0.34);
 }
 
 .fun-name-card-compact {
@@ -881,6 +1128,23 @@
   }
 }
 
+@keyframes om-crest-pop {
+  0% {
+    opacity: 0;
+    transform: translate(12px, 10px) rotate(8deg) scale(0.78);
+  }
+
+  70% {
+    opacity: 1;
+    transform: translate(-2px, -2px) rotate(-3deg) scale(1.06);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate(0) rotate(0deg) scale(1);
+  }
+}
+
 @keyframes om-card-kickoff {
   0% {
     opacity: 0;
@@ -895,6 +1159,66 @@
   100% {
     opacity: 1;
     transform: translateY(0) rotate(0deg) scale(1);
+  }
+}
+
+@keyframes veher-stadium-in {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.9);
+    filter: brightness(1.3);
+  }
+
+  58% {
+    opacity: 1;
+    transform: translateY(-6px) scale(1.03);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: brightness(1);
+  }
+}
+
+@keyframes veher-spotlight-left {
+  50% {
+    transform: rotate(16deg) translateX(24px);
+    opacity: 0.95;
+  }
+}
+
+@keyframes veher-spotlight-right {
+  50% {
+    transform: rotate(-16deg) translateX(-24px);
+    opacity: 0.95;
+  }
+}
+
+@keyframes veher-crest-kickoff {
+  0% {
+    opacity: 0;
+    transform: translateY(-22px) rotate(-8deg) scale(0.74);
+  }
+
+  68% {
+    opacity: 1;
+    transform: translateY(3px) rotate(4deg) scale(1.06);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+}
+
+@keyframes veher-title-pulse {
+  50% {
+    transform: scale(1.04);
+    text-shadow:
+      0 4px 0 var(--color-ink),
+      0 0 24px rgba(0, 159, 218, 0.95),
+      0 0 46px rgba(255, 250, 240, 0.55);
   }
 }
 
@@ -973,6 +1297,11 @@
   .vip-sarah-scene .success-number__burst,
   .veher-om-card,
   .veher-om-scene .success-number__burst,
+  .success-om-crest,
+  .veher-ceremony-modal,
+  .veher-ceremony-light,
+  .veher-ceremony-crest,
+  .veher-ceremony-copy h2,
   .uncle-cod-card,
   .uncle-cod-scene .success-number,
   .sions-contract-modal,
