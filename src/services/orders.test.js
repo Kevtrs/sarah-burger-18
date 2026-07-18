@@ -193,6 +193,26 @@ describe("local order store", () => {
     expect(second.nachos).toBe(false);
   });
 
+  it("keeps order number 13 for Veher without moving the normal counter", async () => {
+    const store = createOrderStore();
+    const special = await store.createOrder({
+      guestName: "veher",
+      toppings: [],
+      sauces: ["none"],
+      clientRequestId: "order-veherxxx",
+    });
+    const normal = await store.createOrder({
+      guestName: "Paul",
+      toppings: [],
+      sauces: ["ketchup"],
+      clientRequestId: "order-normalxx",
+    });
+
+    expect(special.guestName).toBe("Veher");
+    expect(special.number).toBe(13);
+    expect(normal.number).toBe(18);
+  });
+
   it("returns the existing order instead of duplicating on a retried clientRequestId", async () => {
     const store = createOrderStore();
     const input = {

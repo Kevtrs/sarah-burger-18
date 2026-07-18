@@ -125,6 +125,15 @@ function isUncleCodName(value) {
   return variants.has(compact) || tokens.some((token) => variants.has(token));
 }
 
+function isVeherOmName(value) {
+  const normalized = normalizeFunName(value);
+  if (!normalized) return false;
+
+  const compact = normalized.replace(/\s+/g, "");
+  const tokens = normalized.split(" ").filter(Boolean);
+  return compact === "veher" || compact === "veherlive" || tokens.includes("veher");
+}
+
 function sionsContractStorageKey(orderId) {
   return `${sionsContractStoragePrefix}:${orderId}`;
 }
@@ -1336,11 +1345,14 @@ function SingleDoneScreen({ entry, orderQueue, pickupAcks, readyAlert, store }) 
   const queueInfo = orderQueue.getInfo(entry);
   const isSarahVip = isSarahVipName(entry.guestName);
   const isUncleCod = isUncleCodName(entry.guestName);
+  const isVeherOm = isVeherOmName(entry.guestName);
 
   return (
     <section
       className={`order-screen done-layout success-scene ${isSarahVip ? "vip-sarah-scene" : ""} ${
         isUncleCod ? "uncle-cod-scene" : ""
+      } ${
+        isVeherOm ? "veher-om-scene" : ""
       } ${
         isReady || readyAlert.readyAnnounced ? "ready-alert-fired" : ""
       }`}
@@ -1363,7 +1375,7 @@ function SingleDoneScreen({ entry, orderQueue, pickupAcks, readyAlert, store }) 
           : "Ta commande entre en cuisine. Garde bien ton numéro."}
       </p>
       <OrderQueueCard info={queueInfo} />
-      <FunNameNotice guestName={entry.guestName} />
+      <FunNameNotice guestName={entry.guestName} orderNumber={entry.number} />
       <div className="success-ticket" aria-hidden="true">
         <span>SARAH BURGER</span>
         <strong>#{entry.number}</strong>
@@ -1414,7 +1426,7 @@ function GroupDoneScreen({ orderQueue, orders, pickupAcks, readyAlert, store }) 
                 <span className="group-ticket-name">{item.guestName}</span>
                 <StatusPill status={item.lastStatus} />
               </div>
-              <FunNameNotice guestName={item.guestName} compact />
+              <FunNameNotice guestName={item.guestName} orderNumber={item.number} compact />
               {item.lastStatus === "ready" && <PickupReadyPanel entry={item} pickupAcks={pickupAcks} compact />}
               <SelectedItemsRow toppings={item.toppings} sauces={item.sauces} nachos={item.nachos} compact />
               <GuestChatButton compact entry={item} onOpen={() => setChatOrderId(item.orderId)} />
@@ -1483,7 +1495,19 @@ function GuestChatModal({ disabled, entry, onClose, store }) {
   );
 }
 
-function FunNameNotice({ guestName, compact = false }) {
+function FunNameNotice({ guestName, orderNumber, compact = false }) {
+  if (isVeherOmName(guestName)) {
+    return (
+      <div className={`fun-name-card veher-om-card ${compact ? "fun-name-card-compact" : ""}`}>
+        <img src={assetPath("om-logo.png")} alt="" aria-hidden="true" />
+        <div>
+          <strong>Droit au burger activé</strong>
+          <span>Veher garde son ticket mythique #{orderNumber || 13}. Virage cheddar, sauce à domicile.</span>
+        </div>
+      </div>
+    );
+  }
+
   if (isSarahVipName(guestName)) {
     return (
       <div className={`fun-name-card vip-sarah-card ${compact ? "fun-name-card-compact" : ""}`}>

@@ -39,6 +39,7 @@ const allowedUnavailable = {
   sauces: allowedSauces,
   extras: ["nachos"],
 };
+const veherOrderNumber = 13;
 const noSauceId = "none";
 const itemLabels = {
   pickles: "Cornichons",
@@ -69,7 +70,26 @@ function assertSessionKey() {
 }
 
 function cleanName(name) {
-  return name.trim().replace(/\s+/g, " ").slice(0, 32);
+  const cleaned = name.trim().replace(/\s+/g, " ").slice(0, 32);
+  return isVeherGuestName(cleaned) ? "Veher" : cleaned;
+}
+
+function normalizeGuestNameKey(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ");
+}
+
+function isVeherGuestName(value) {
+  const normalized = normalizeGuestNameKey(value);
+  if (!normalized) return false;
+
+  const compact = normalized.replace(/\s+/g, "");
+  const tokens = normalized.split(" ").filter(Boolean);
+  return compact === "veher" || compact === "veherlive" || tokens.includes("veher");
 }
 
 function cleanMessageText(value) {
@@ -370,18 +390,22 @@ function makeFirebaseOrderStore() {
       const meta = await readFirebaseSessionMeta(db);
       assertOrderSessionState(input, meta);
 
-      const counterRef = ref(db, sessionPath("meta/lastNumber"));
-      const counterResult = await runTransaction(
-        counterRef,
-        (current) => Number(current || appConfig.firstOrderNumber - 1) + 1,
-        { applyLocally: false },
-      );
+      let number = veherOrderNumber;
 
-      if (!counterResult.committed) {
-        throw new Error("Impossible de réserver un numéro de commande.");
+      if (!isVeherGuestName(input.guestName)) {
+        const counterRef = ref(db, sessionPath("meta/lastNumber"));
+        const counterResult = await runTransaction(
+          counterRef,
+          (current) => Number(current || appConfig.firstOrderNumber - 1) + 1,
+          { applyLocally: false },
+        );
+
+        if (!counterResult.committed) {
+          throw new Error("Impossible de réserver un numéro de commande.");
+        }
+
+        number = Number(counterResult.snapshot.val());
       }
-
-      const number = Number(counterResult.snapshot.val());
       const optimisticPayload = createOrderPayload({ ...input, clientRequestId }, number, user);
       const serverPayload = {
         ...optimisticPayload,
@@ -855,8 +879,9 @@ function makeLocalStore() {
 
       assertOrderSessionState(input, readLocalMeta());
 
+      const number = isVeherGuestName(input.guestName) ? veherOrderNumber : nextNumber();
       const order = {
-        ...createOrderPayload({ ...input, clientRequestId }, nextNumber(), { uid: "local" }),
+        ...createOrderPayload({ ...input, clientRequestId }, number, { uid: "local" }),
       };
       writeOrders([...readOrders(), order]);
       return normalizeOrder(order);

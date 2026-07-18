@@ -53,6 +53,41 @@
     blacklist-glitch 620ms steps(2, end) 820ms 4;
 }
 
+.veher-om-scene::before {
+  border-color: rgba(0, 159, 218, 0.32);
+  background:
+    radial-gradient(circle at 50% 18%, rgba(191, 144, 86, 0.2), transparent 34%),
+    linear-gradient(135deg, rgba(0, 159, 218, 0.16), transparent 34% 64%, rgba(191, 144, 86, 0.16)),
+    rgba(255, 250, 240, 0.42);
+}
+
+.veher-om-scene .success-number__burst {
+  border-color: #009fda;
+  background:
+    radial-gradient(circle, rgba(255, 250, 240, 0.86) 0 24%, transparent 25%),
+    repeating-conic-gradient(
+      from -12deg,
+      rgba(0, 159, 218, 0.34) 0 10deg,
+      rgba(255, 250, 240, 0.2) 10deg 18deg,
+      rgba(191, 144, 86, 0.3) 18deg 28deg
+    );
+  animation:
+    burst-shadow 700ms var(--ease-pop) 120ms both,
+    om-halo-spin 2.2s linear 760ms 2;
+}
+
+.veher-om-scene .success-number {
+  background: #009fda;
+  color: white;
+  text-shadow:
+    0 3px 0 rgba(23, 18, 15, 0.35),
+    0 0 18px rgba(255, 250, 240, 0.62);
+  box-shadow:
+    var(--shadow-strong),
+    0 0 0 9px rgba(255, 250, 240, 0.95),
+    0 0 0 14px rgba(191, 144, 86, 0.42);
+}
+
 .success-copy h1 {
   margin-bottom: 0;
   font-size: 2.24rem;
@@ -181,6 +216,15 @@
   height: 24px;
 }
 
+.fun-name-card img {
+  width: 42px;
+  height: 52px;
+  object-fit: contain;
+  filter:
+    drop-shadow(1px 2px 0 rgba(23, 18, 15, 0.22))
+    drop-shadow(0 0 10px rgba(0, 159, 218, 0.24));
+}
+
 .fun-name-card div {
   display: grid;
   min-width: 0;
@@ -257,6 +301,35 @@
 
 .uncle-cod-card span {
   color: rgba(255, 250, 240, 0.88);
+}
+
+.veher-om-card {
+  position: relative;
+  overflow: hidden;
+  border-color: #009fda;
+  background:
+    linear-gradient(120deg, rgba(255, 250, 240, 0.96) 0 54%, rgba(223, 242, 255, 0.96) 54%),
+    white;
+  box-shadow:
+    var(--shadow-small),
+    0 0 0 4px rgba(0, 159, 218, 0.16),
+    0 0 24px rgba(0, 159, 218, 0.22);
+  animation: om-card-kickoff 780ms var(--ease-pop) both;
+}
+
+.veher-om-card::after {
+  position: absolute;
+  inset: auto -10% 7px;
+  height: 5px;
+  background:
+    linear-gradient(90deg, transparent, #009fda 12% 42%, #bf9056 42% 58%, #009fda 58% 88%, transparent);
+  content: "";
+  opacity: 0.7;
+}
+
+.veher-om-card strong {
+  color: #0077a6;
+  text-shadow: 0 0 10px rgba(0, 159, 218, 0.24);
 }
 
 .sions-contract-backdrop {
@@ -791,6 +864,40 @@
   }
 }
 
+@keyframes om-halo-spin {
+  0% {
+    filter: drop-shadow(0 0 0 rgba(0, 159, 218, 0));
+    transform: scale(1) rotate(0deg);
+  }
+
+  50% {
+    filter: drop-shadow(0 0 13px rgba(0, 159, 218, 0.5));
+    transform: scale(1.04) rotate(8deg);
+  }
+
+  100% {
+    filter: drop-shadow(0 0 0 rgba(0, 159, 218, 0));
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes om-card-kickoff {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) rotate(-2deg) scale(0.94);
+  }
+
+  64% {
+    opacity: 1;
+    transform: translateY(-3px) rotate(1deg) scale(1.03);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+}
+
 @keyframes sions-contract-in {
   0% {
     opacity: 0;
@@ -864,6 +971,8 @@
   .pickup-buzzer,
   .vip-sarah-card,
   .vip-sarah-scene .success-number__burst,
+  .veher-om-card,
+  .veher-om-scene .success-number__burst,
   .uncle-cod-card,
   .uncle-cod-scene .success-number,
   .sions-contract-modal,
