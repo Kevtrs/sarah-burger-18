@@ -84,6 +84,12 @@ export const noSauceOption = {
   shortLabel: "Sans sauce",
 };
 
+export const nachosOption = {
+  id: "nachos",
+  label: "Nachos au cheddar",
+  note: "Une portion en accompagnement",
+};
+
 export const sauceIds = sauces.map((item) => item.id);
 
 export const statuses = {

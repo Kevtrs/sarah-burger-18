@@ -64,6 +64,11 @@ Sauces :
 - moutarde ;
 - Sans sauce.
 
+Accompagnement (optionnel, une portion par burger) :
+
+- nachos au cheddar. Choisi à défaut de proposer des frites, impossibles à
+  gérer proprement sans friteuse professionnelle pour ~60 personnes.
+
 Les invités peuvent choisir plusieurs sauces. `Sans sauce` est exclusif : si l'invité le choisit, les autres sauces sont retirées ; s'il choisit une vraie sauce ensuite, `Sans sauce` est retiré.
 
 ## Installation locale

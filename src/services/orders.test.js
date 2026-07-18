@@ -63,6 +63,36 @@ describe("normalizeOrder", () => {
     expect(order.toppings).toEqual(["pickles"]);
     expect(order.sauces).toEqual(["mayo"]);
   });
+
+  it("defaults nachos to false and only accepts a strict boolean true", () => {
+    const withoutField = normalizeOrder({
+      id: "o6",
+      number: 25,
+      guestName: "Zoé",
+      status: "received",
+      createdAtMs: 1000,
+    });
+    const withTruthyString = normalizeOrder({
+      id: "o7",
+      number: 26,
+      guestName: "Zoé",
+      nachos: "true",
+      status: "received",
+      createdAtMs: 1000,
+    });
+    const withTrue = normalizeOrder({
+      id: "o8",
+      number: 27,
+      guestName: "Zoé",
+      nachos: true,
+      status: "received",
+      createdAtMs: 1000,
+    });
+
+    expect(withoutField.nachos).toBe(false);
+    expect(withTruthyString.nachos).toBe(false);
+    expect(withTrue.nachos).toBe(true);
+  });
 });
 
 describe("assertValidFirebaseKey", () => {
@@ -93,6 +123,7 @@ describe("local order store", () => {
       guestName: "Tom",
       toppings: ["pickles"],
       sauces: ["ketchup"],
+      nachos: true,
       clientRequestId: "order-aaaaaaaa",
     });
     const second = await store.createOrder({
@@ -103,6 +134,8 @@ describe("local order store", () => {
     });
 
     expect(second.number).toBe(first.number + 1);
+    expect(first.nachos).toBe(true);
+    expect(second.nachos).toBe(false);
   });
 
   it("returns the existing order instead of duplicating on a retried clientRequestId", async () => {

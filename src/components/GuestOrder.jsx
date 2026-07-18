@@ -7,6 +7,7 @@ import {
   Sparkles,
   Trash2,
   UserPlus,
+  UtensilsCrossed,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -16,6 +17,7 @@ import {
   baseBurger,
   getSauceLabels,
   getToppingLabels,
+  nachosOption,
   noSauceOption,
   sauces,
   statuses,
@@ -73,6 +75,7 @@ export function GuestOrder({ store }) {
   const [guestName, setGuestName] = useState("");
   const [selectedToppings, setSelectedToppings] = useState([]);
   const [selectedSauces, setSelectedSauces] = useState([]);
+  const [wantsNachos, setWantsNachos] = useState(false);
   const [cart, setCart] = useState([]);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -172,6 +175,10 @@ export function GuestOrder({ store }) {
     });
   }
 
+  function toggleNachos() {
+    setWantsNachos((current) => !current);
+  }
+
   function canGoNext() {
     if (step === "identity") return guestName.trim().length > 0;
     if (step === "customize") return selectedSauces.length > 0;
@@ -252,6 +259,7 @@ export function GuestOrder({ store }) {
         guestName,
         toppings: selectedToppings,
         sauces: selectedSauces,
+        nachos: wantsNachos,
       },
     ];
 
@@ -266,6 +274,7 @@ export function GuestOrder({ store }) {
           guestName: item.guestName,
           toppings: item.toppings,
           sauces: item.sauces,
+          nachos: item.nachos,
           clientRequestId: item.clientRequestId,
         });
         readyAlert.trackOrder(created);
@@ -315,6 +324,7 @@ export function GuestOrder({ store }) {
         setGuestName("");
         setSelectedToppings([]);
         setSelectedSauces([]);
+        setWantsNachos(false);
         setCart([]);
         setError("");
         setIsSubmitting(false);
@@ -433,6 +443,7 @@ export function GuestOrder({ store }) {
           </div>
 
           <ToppingsGrid selectedToppings={selectedToppings} onToggle={toggleTopping} />
+          <NachosOption selected={wantsNachos} onToggle={toggleNachos} />
           <SaucesGrid selectedSauces={selectedSauces} onToggle={toggleSauce} />
         </section>
       )}
@@ -451,6 +462,7 @@ export function GuestOrder({ store }) {
               guestName={guestName}
               toppings={selectedToppingLabels}
               sauces={selectedSauceLabels}
+              nachos={wantsNachos}
               submitState={submitState}
             />
             {isDuplicateName && (
@@ -708,6 +720,41 @@ function SaucesGrid({ selectedSauces, onToggle }) {
   );
 }
 
+function NachosOption({ selected, onToggle }) {
+  return (
+    <div className="choice-section nachos-section">
+      <div className="section-heading">
+        <p className="eyebrow">Accompagnement</p>
+        <h2>Envie d&apos;un extra ?</h2>
+      </div>
+      <div className="choice-grid nachos-grid">
+        <button
+          className={`option-card choice-card choice-gold mascot-nachos ${selected ? "selected" : ""}`}
+          type="button"
+          data-option={nachosOption.id}
+          data-selected={selected}
+          onClick={onToggle}
+          aria-pressed={selected}
+        >
+          <span className="option-card__shadow" aria-hidden="true" />
+          <span className="option-card__accent" aria-hidden="true" />
+          <span className="option-card__art choice-art nachos-art">
+            <UtensilsCrossed aria-hidden="true" />
+          </span>
+          <span className="option-card__content choice-copy">
+            <strong>{nachosOption.label}</strong>
+            <small>{nachosOption.note}</small>
+          </span>
+          <span className="option-card__control choice-check" aria-hidden="true">
+            <Check />
+          </span>
+          <span className="option-card__burst" aria-hidden="true" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function GroupOrderPrompt({ onAddBurger, onDismiss }) {
   return (
     <div className="modal-backdrop" role="presentation" onClick={onDismiss}>
@@ -752,6 +799,7 @@ function AddBurgerModal({ existingNames, onCancel, onConfirm }) {
   const [guestName, setGuestName] = useState("");
   const [selectedToppings, setSelectedToppings] = useState([]);
   const [selectedSauces, setSelectedSauces] = useState([]);
+  const [wantsNachos, setWantsNachos] = useState(false);
   const [error, setError] = useState("");
 
   const trimmedName = guestName.trim();
@@ -787,6 +835,10 @@ function AddBurgerModal({ existingNames, onCancel, onConfirm }) {
     });
   }
 
+  function toggleNachos() {
+    setWantsNachos((current) => !current);
+  }
+
   function handleConfirm() {
     if (!trimmedName) {
       setError("Ajoute un prénom avant de continuer.");
@@ -800,7 +852,7 @@ function AddBurgerModal({ existingNames, onCancel, onConfirm }) {
       setError("Choisis une sauce ou Sans sauce.");
       return;
     }
-    onConfirm({ guestName: trimmedName, toppings: selectedToppings, sauces: selectedSauces });
+    onConfirm({ guestName: trimmedName, toppings: selectedToppings, sauces: selectedSauces, nachos: wantsNachos });
   }
 
   return (
@@ -849,6 +901,7 @@ function AddBurgerModal({ existingNames, onCancel, onConfirm }) {
           {error && <InlineNotice tone="error">{error}</InlineNotice>}
 
           <ToppingsGrid selectedToppings={selectedToppings} onToggle={toggleTopping} />
+          <NachosOption selected={wantsNachos} onToggle={toggleNachos} />
           <SaucesGrid selectedSauces={selectedSauces} onToggle={toggleSauce} />
         </div>
 
@@ -876,6 +929,7 @@ function CartList({ cart, onRemove }) {
           <span className="cart-list-name">{item.guestName || "Sans prénom"}</span>
           <span className="cart-list-detail">
             {getSauceLabels(item.sauces).join(", ") || noSauceOption.label}
+            {item.nachos ? ` + ${nachosOption.label}` : ""}
           </span>
           <button
             className="cart-list-remove"
@@ -891,7 +945,7 @@ function CartList({ cart, onRemove }) {
   );
 }
 
-function OrderSummary({ guestName, toppings: toppingLabels, sauces: sauceLabels, submitState }) {
+function OrderSummary({ guestName, toppings: toppingLabels, sauces: sauceLabels, nachos, submitState }) {
   const stamp = submitState === "success" ? "Validé" : "À confirmer";
   const now = new Date();
   const ticketDate = new Intl.DateTimeFormat("fr-FR", {
@@ -937,6 +991,10 @@ function OrderSummary({ guestName, toppings: toppingLabels, sauces: sauceLabels,
           <div>
             <dt>Sauces</dt>
             <dd>{sauceLabels.length ? sauceLabels.join(", ") : noSauceOption.label}</dd>
+          </div>
+          <div>
+            <dt>Extra</dt>
+            <dd>{nachos ? nachosOption.label : "Sans accompagnement"}</dd>
           </div>
         </dl>
       </article>

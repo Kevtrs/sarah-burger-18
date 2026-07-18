@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   getSauceLabels,
   getToppingLabels,
+  nachosOption,
   noSauceOption,
   statusOrder,
   statuses,
@@ -366,6 +367,12 @@ function OrderTicket({ order, now, isPending, onChangeStatus }) {
           <dt>Sauces</dt>
           <dd>{sauceLabels.length ? sauceLabels.join(", ") : noSauceOption.label}</dd>
         </div>
+        {order.nachos && (
+          <div>
+            <dt>Extra</dt>
+            <dd>{nachosOption.label}</dd>
+          </div>
+        )}
         <div>
           <dt>Reçue</dt>
           <dd>{formatTime(order.createdAtMs)}</dd>
