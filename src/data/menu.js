@@ -88,6 +88,8 @@ export const nachosOption = {
   id: "nachos",
   label: "Nachos au cheddar",
   note: "Une portion en accompagnement",
+  asset: "nachos.png",
+  accent: "gold",
 };
 
 export const sauceIds = sauces.map((item) => item.id);

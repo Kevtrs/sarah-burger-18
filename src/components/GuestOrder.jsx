@@ -7,7 +7,6 @@ import {
   Sparkles,
   Trash2,
   UserPlus,
-  UtensilsCrossed,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -738,8 +737,8 @@ function NachosOption({ selected, onToggle }) {
         >
           <span className="option-card__shadow" aria-hidden="true" />
           <span className="option-card__accent" aria-hidden="true" />
-          <span className="option-card__art choice-art nachos-art">
-            <UtensilsCrossed aria-hidden="true" />
+          <span className="option-card__art choice-art">
+            <img src={assetPath(nachosOption.asset)} alt="" aria-hidden="true" />
           </span>
           <span className="option-card__content choice-copy">
             <strong>{nachosOption.label}</strong>

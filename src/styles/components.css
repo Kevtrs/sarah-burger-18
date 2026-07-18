@@ -573,22 +573,6 @@
   box-shadow: var(--shadow-small);
 }
 
-.nachos-art {
-  display: grid;
-  place-items: center;
-}
-
-.nachos-art svg {
-  width: 54px;
-  height: 54px;
-  padding: 11px;
-  border: var(--border-standard);
-  border-radius: 50%;
-  background: white;
-  color: var(--color-orange);
-  box-shadow: var(--shadow-small);
-}
-
 .option-card__content {
   min-width: 0;
 }
