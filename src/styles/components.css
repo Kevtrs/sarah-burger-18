@@ -1700,6 +1700,53 @@ dd {
   text-align: left;
 }
 
+.guest-chat-open-button {
+  width: min(350px, 100%);
+  min-height: 50px;
+  justify-content: center;
+  background: var(--color-red);
+  color: white;
+  box-shadow:
+    var(--shadow-small),
+    0 0 0 5px rgba(233, 54, 104, 0.16);
+}
+
+.guest-chat-open-button.compact {
+  width: 100%;
+  min-height: 42px;
+}
+
+.guest-chat-open-button svg {
+  width: 21px;
+  height: 21px;
+}
+
+.guest-chat-modal {
+  max-height: min(78vh, 620px);
+}
+
+.guest-chat-modal .modal-sheet__header small {
+  display: block;
+  margin-top: 2px;
+  color: var(--color-muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.guest-chat-modal .modal-sheet__body {
+  padding: 14px;
+}
+
+.guest-chat-modal .order-messages {
+  width: 100%;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.guest-chat-modal .order-messages__thread {
+  max-height: min(42vh, 300px);
+}
+
 .order-messages__header {
   display: flex;
   align-items: center;

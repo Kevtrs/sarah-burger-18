@@ -3,6 +3,7 @@ import {
   Check,
   CheckCircle2,
   Clock3,
+  MessageCircle,
   RotateCcw,
   Send,
   Sparkles,
@@ -1329,6 +1330,7 @@ function SelectedItemsRow({ toppings: toppingIds, sauces: sauceIds, nachos, comp
 }
 
 function SingleDoneScreen({ entry, orderQueue, pickupAcks, readyAlert, store }) {
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const isReady = entry.lastStatus === "ready";
   const messagesDisabled = entry.lastStatus === "served" || entry.lastStatus === "cancelled";
   const queueInfo = orderQueue.getInfo(entry);
@@ -1372,21 +1374,25 @@ function SingleDoneScreen({ entry, orderQueue, pickupAcks, readyAlert, store }) 
       {isReady && <InlineNotice tone="success">Ta commande est prête !</InlineNotice>}
       <PickupReadyPanel entry={entry} pickupAcks={pickupAcks} />
       <ReadyAlertPanel readyAlert={readyAlert} anyReady={isReady} />
-      <OrderMessages
-        disabled={messagesDisabled}
-        guestName={entry.guestName}
-        orderId={entry.orderId}
-        orderNumber={entry.number}
-        store={store}
-      />
+      <GuestChatButton entry={entry} onOpen={() => setIsChatOpen(true)} />
+      {isChatOpen && (
+        <GuestChatModal
+          disabled={messagesDisabled}
+          entry={entry}
+          onClose={() => setIsChatOpen(false)}
+          store={store}
+        />
+      )}
     </section>
   );
 }
 
 function GroupDoneScreen({ orderQueue, orders, pickupAcks, readyAlert, store }) {
+  const [chatOrderId, setChatOrderId] = useState("");
   const anyReady = orders.some((item) => item.lastStatus === "ready");
   const queueInfos = orders.map((item) => ({ order: item, info: orderQueue.getInfo(item) }));
   const visibleQueueInfos = queueInfos.filter((item) => item.info.visible);
+  const chatEntry = orders.find((item) => item.orderId === chatOrderId);
 
   return (
     <section
@@ -1411,6 +1417,7 @@ function GroupDoneScreen({ orderQueue, orders, pickupAcks, readyAlert, store }) 
               <FunNameNotice guestName={item.guestName} compact />
               {item.lastStatus === "ready" && <PickupReadyPanel entry={item} pickupAcks={pickupAcks} compact />}
               <SelectedItemsRow toppings={item.toppings} sauces={item.sauces} nachos={item.nachos} compact />
+              <GuestChatButton compact entry={item} onOpen={() => setChatOrderId(item.orderId)} />
             </li>
           );
         })}
@@ -1418,19 +1425,61 @@ function GroupDoneScreen({ orderQueue, orders, pickupAcks, readyAlert, store }) 
       <p className="success-note muted">Garde ces numéros. Viens récupérer chaque burger dès qu&apos;il est prêt.</p>
       <GroupQueueCard items={visibleQueueInfos} />
       <ReadyAlertPanel readyAlert={readyAlert} anyReady={anyReady} />
-      <div className="group-message-panels">
-        {orders.map((item) => (
+      {chatEntry && (
+        <GuestChatModal
+          disabled={chatEntry.lastStatus === "served" || chatEntry.lastStatus === "cancelled"}
+          entry={chatEntry}
+          onClose={() => setChatOrderId("")}
+          store={store}
+        />
+      )}
+    </section>
+  );
+}
+
+function GuestChatButton({ compact = false, entry, onOpen }) {
+  return (
+    <button
+      className={`primary-action guest-chat-open-button ${compact ? "compact" : ""}`}
+      type="button"
+      onClick={onOpen}
+    >
+      <MessageCircle aria-hidden="true" />
+      {compact ? `Message #${entry.number}` : "Message au stand"}
+    </button>
+  );
+}
+
+function GuestChatModal({ disabled, entry, onClose, store }) {
+  return (
+    <div className="modal-backdrop guest-chat-backdrop" role="presentation" onClick={onClose}>
+      <section
+        className="modal-sheet guest-chat-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="guest-chat-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="modal-sheet__header">
+          <div>
+            <h2 id="guest-chat-title">Message au stand</h2>
+            <small>Commande #{entry.number}</small>
+          </div>
+          <button className="modal-sheet__close" type="button" onClick={onClose} aria-label="Fermer">
+            <X aria-hidden="true" />
+          </button>
+        </header>
+        <div className="modal-sheet__body">
           <OrderMessages
-            disabled={item.lastStatus === "served" || item.lastStatus === "cancelled"}
-            guestName={item.guestName}
-            key={item.orderId}
-            orderId={item.orderId}
-            orderNumber={item.number}
+            disabled={disabled}
+            guestName={entry.guestName}
+            orderId={entry.orderId}
+            orderNumber={entry.number}
             store={store}
           />
-        ))}
-      </div>
-    </section>
+        </div>
+      </section>
+    </div>
   );
 }
 
