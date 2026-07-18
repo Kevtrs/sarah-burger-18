@@ -31,6 +31,7 @@ import { OrderMessages } from "./OrderMessages";
 const steps = ["identity", "customize", "nachos", "review", "done"];
 const progressLabels = ["Prénom", "Burger", "Nachos", "Ticket"];
 const introStorageKey = "sarah-burger-intro-seen";
+const sionsContractStoragePrefix = "sarah-burger-sions-contract-signed-v1";
 const confettiColors = ["#e93668", "#f4c33f", "#d64023", "#1f6ec7", "#fffaf0"];
 const confettiPieces = Array.from({ length: 24 }, (_, index) => {
   const side = index % 2 === 0 ? -1 : 1;
@@ -123,6 +124,15 @@ function isUncleCodName(value) {
   return variants.has(compact) || tokens.some((token) => variants.has(token));
 }
 
+function sionsContractStorageKey(orderId) {
+  return `${sionsContractStoragePrefix}:${orderId}`;
+}
+
+function hasSignedSionsContract(orderId) {
+  if (typeof window === "undefined" || !orderId) return false;
+  return window.localStorage.getItem(sionsContractStorageKey(orderId)) === "yes";
+}
+
 export function GuestOrder({ store }) {
   const [step, setStep] = useState("identity");
   const [guestName, setGuestName] = useState("");
@@ -143,6 +153,7 @@ export function GuestOrder({ store }) {
   });
   const [isAddBurgerOpen, setIsAddBurgerOpen] = useState(false);
   const [showGroupPrompt, setShowGroupPrompt] = useState(false);
+  const [sionsContractOrder, setSionsContractOrder] = useState(null);
   const submitTimersRef = useRef([]);
   const clientRequestIdRef = useRef(makeClientRequestId());
   const hasResumedOrderRef = useRef(false);
@@ -377,6 +388,7 @@ export function GuestOrder({ store }) {
     setError("");
 
     try {
+      const createdOrders = [];
       for (const item of items) {
         const created = await store.createOrder({
           guestName: item.guestName,
@@ -386,7 +398,12 @@ export function GuestOrder({ store }) {
           clientRequestId: item.clientRequestId,
         });
         readyAlert.trackOrder(created);
+        createdOrders.push(created);
       }
+
+      const prankOrder = createdOrders.find(
+        (order) => isUncleCodName(order.guestName) && !hasSignedSionsContract(order.id),
+      );
 
       setCart([]);
       setSubmitState("success");
@@ -400,6 +417,7 @@ export function GuestOrder({ store }) {
         }, "review-to-done");
         setIsSubmitting(false);
         setSubmitState("idle");
+        if (prankOrder) setSionsContractOrder(prankOrder);
         window.scrollTo({ top: 0, behavior: "auto" });
       }, 760);
 
@@ -421,6 +439,7 @@ export function GuestOrder({ store }) {
   function reset() {
     clearSubmitTimers();
     readyAlert.clearTrackedOrders();
+    setSionsContractOrder(null);
     hasShownGroupPromptRef.current = false;
     if (groupPromptTimerRef.current) {
       window.clearTimeout(groupPromptTimerRef.current);
@@ -610,6 +629,16 @@ export function GuestOrder({ store }) {
           unavailable={sessionMeta.unavailable}
           onCancel={closeAddBurgerModal}
           onConfirm={confirmAddBurger}
+        />
+      )}
+
+      {sionsContractOrder && (
+        <SionsContractModal
+          order={sionsContractOrder}
+          onSign={() => {
+            window.localStorage.setItem(sionsContractStorageKey(sionsContractOrder.id), "yes");
+            setSionsContractOrder(null);
+          }}
         />
       )}
 
@@ -974,6 +1003,40 @@ function NachosStep({ guestName, toppingLabels, sauceLabels, selectedChoice, onC
 
       {blocked && <InlineNotice tone="warning">Les nachos sont épuisés pour le moment.</InlineNotice>}
     </section>
+  );
+}
+
+function SionsContractModal({ order, onSign }) {
+  return (
+    <div className="modal-backdrop sions-contract-backdrop" role="presentation">
+      <section
+        className="sions-contract-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sions-contract-title"
+      >
+        <div className="sions-contract-alert" aria-hidden="true">
+          <X />
+          <span>Accès bloqué</span>
+        </div>
+
+        <div className="sions-contract-copy">
+          <p className="eyebrow">Blacklist des Sions</p>
+          <h2 id="sions-contract-title">Les Sions t&apos;ont bloqué ta commande</h2>
+          <p>
+            Commande #{order.number} au nom de {order.guestName}. Accepte de leur vendre tes informations pour
+            débloquer ton ticket Sarah Burger.
+          </p>
+          <small>Contrat bidon de la team COD. Aucune vraie info n&apos;est envoyée.</small>
+        </div>
+
+        <button className="primary-action cta-button sions-contract-sign" type="button" onClick={onSign} autoFocus>
+          <span className="cta-button__base" aria-hidden="true" />
+          <span className="cta-button__shine" aria-hidden="true" />
+          Oui, signer
+        </button>
+      </section>
+    </div>
   );
 }
 
