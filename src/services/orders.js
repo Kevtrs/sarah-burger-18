@@ -76,6 +76,11 @@ function cleanMessageText(value) {
   return String(value || "").trim().replace(/\s+/g, " ").slice(0, 180);
 }
 
+function isFirebasePermissionError(error) {
+  const message = `${error?.code || ""} ${error?.message || ""}`.toLowerCase();
+  return message.includes("permission_denied") || message.includes("permission denied");
+}
+
 function normalizeArray(value, allowedValues) {
   if (Array.isArray(value)) return value.filter((item) => allowedValues.includes(item));
   if (value && typeof value === "object") {
@@ -129,6 +134,7 @@ export function normalizeOrder(data) {
     id: data.id,
     sessionId: data.sessionId || sessionId,
     clientRequestId: data.clientRequestId || "",
+    pickupToken: typeof data.pickupToken === "string" ? data.pickupToken : "",
     guestUid: data.guestUid || "",
     number: Number(data.number),
     guestName: data.guestName || "",
@@ -190,6 +196,11 @@ export function normalizePickupAck(data) {
 function normalizeClientRequestId(value) {
   if (typeof value === "string" && /^[a-zA-Z0-9_-]{8,80}$/.test(value)) return value;
   return crypto.randomUUID?.() || `order-${Date.now()}`;
+}
+
+function normalizePickupToken(value) {
+  if (typeof value === "string" && /^[a-zA-Z0-9_-]{16,120}$/.test(value)) return value;
+  return crypto.randomUUID?.() || `pickup-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
 function normalizeMessage(data) {
@@ -269,12 +280,14 @@ async function readFirebaseSessionMeta(db) {
 function createOrderPayload(input, number, user) {
   const now = Date.now();
   const clientRequestId = normalizeClientRequestId(input.clientRequestId);
+  const pickupToken = normalizePickupToken(input.pickupToken);
   const sauces = serializeSauces(input.sauces);
 
   return {
     id: clientRequestId,
     sessionId,
     clientRequestId,
+    pickupToken,
     guestUid: user?.uid || "local",
     number,
     guestName: cleanName(input.guestName),
@@ -607,16 +620,58 @@ function makeFirebaseOrderStore() {
       }
     },
 
-    async acknowledgePickup(orderId) {
+    async acknowledgePickup(orderId, options = {}) {
       const user = await ensureGuestAuth();
       const { db } = requireFirebaseRuntime();
       assertSessionKey();
       assertValidFirebaseKey(orderId, "orderId");
 
+      const pickupToken =
+        typeof options.pickupToken === "string" && /^[a-zA-Z0-9_-]{16,120}$/.test(options.pickupToken)
+          ? options.pickupToken
+          : "";
+      const orderNumber = Number(options.orderNumber || 0);
+      if (pickupToken && Number.isFinite(orderNumber) && orderNumber > 0) {
+        const tokenPayload = {
+          id: orderId,
+          orderId,
+          pickupToken,
+          ownerUid: user.uid,
+          orderNumber,
+          acknowledged: true,
+          seenAtMs: serverTimestamp(),
+          updatedAtMs: serverTimestamp(),
+        };
+
+        try {
+          await set(ref(db, sessionPath(`pickupAcks/${orderId}`)), tokenPayload);
+          return normalizePickupAck({ ...tokenPayload, seenAtMs: Date.now(), updatedAtMs: Date.now() });
+        } catch (err) {
+          if (!isFirebasePermissionError(err)) throw err;
+        }
+      }
+
       const orderSnapshot = await get(ref(db, sessionPath(`orders/${orderId}`)));
       if (!orderSnapshot.exists()) throw new Error("Commande introuvable.");
 
       const order = normalizeOrder(orderSnapshot.val());
+      if (order.guestUid !== user.uid && (await hasKitchenAccess(user.uid))) {
+        if (order.status !== "ready") throw new Error("La commande n'est pas encore prete.");
+
+        const staffPayload = {
+          id: orderId,
+          orderId,
+          ownerUid: user.uid,
+          orderNumber: order.number,
+          acknowledged: true,
+          seenAtMs: serverTimestamp(),
+          updatedAtMs: serverTimestamp(),
+        };
+
+        await set(ref(db, sessionPath(`pickupAcks/${orderId}`)), staffPayload);
+        return normalizePickupAck({ ...staffPayload, seenAtMs: Date.now(), updatedAtMs: Date.now() });
+      }
+
       if (order.guestUid !== user.uid) throw new Error("Cette commande n'est pas liée à cet appareil.");
       if (order.status !== "ready") throw new Error("La commande n'est pas encore prête.");
 

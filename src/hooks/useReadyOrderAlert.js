@@ -18,6 +18,7 @@ function readStoredAlert() {
       .map((item) => ({
         orderId: item.orderId,
         guestName: typeof item.guestName === "string" ? item.guestName : "",
+        pickupToken: typeof item.pickupToken === "string" ? item.pickupToken : "",
         lastStatus: typeof item.lastStatus === "string" ? item.lastStatus : "received",
         number: Number(item.number || 0),
         readyNotified: item.readyNotified === true,
@@ -107,6 +108,7 @@ export function useReadyOrderAlert(store) {
         const entry = {
           orderId: order.id,
           guestName: order.guestName || existing?.guestName || "",
+          pickupToken: order.pickupToken || existing?.pickupToken || "",
           lastStatus: order.status || existing?.lastStatus || "received",
           number: Number(order.number || existing?.number || 0),
           readyNotified: existing?.readyNotified === true,
