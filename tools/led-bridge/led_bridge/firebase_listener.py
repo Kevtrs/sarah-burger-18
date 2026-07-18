@@ -68,13 +68,22 @@ class FirebaseOrdersWatcher:
         data = response.json()
         return data if isinstance(data, dict) else None
 
-    def listen(self, on_event: Callable[[OrderEvent], None], stop_event: Event) -> None:
+    def listen(
+        self,
+        on_event: Callable[[OrderEvent], None],
+        stop_event: Event,
+        on_connection_state: Callable[[bool, str], None] | None = None,
+    ) -> None:
         while not stop_event.is_set():
             try:
                 self._seed(on_event)
+                if on_connection_state:
+                    on_connection_state(True, "")
                 self._stream(on_event, stop_event)
             except Exception as exc:
-                log(f"Firebase indisponible, nouvel essai dans 5s: {exc}")
+                if on_connection_state:
+                    on_connection_state(False, str(exc)[:80])
+                log(f"Firebase indisponible, nouvel essai dans 5s, dernier affichage conserve: {exc}")
                 stop_event.wait(5)
 
     def _seed(self, on_event: Callable[[OrderEvent], None]) -> None:

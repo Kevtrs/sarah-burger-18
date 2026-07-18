@@ -26,7 +26,10 @@
   "behavior": {
     "queue_existing_ready_on_start": false,
     "stuck_order_minutes": 15,
-    "stuck_repeat_minutes": 5
+    "stuck_repeat_minutes": 5,
+    "health_log_seconds": 30,
+    "config_reload_seconds": 1.5,
+    "event_log_path": "orders-log.txt"
   },
   "generated_dir": "generated"
 }

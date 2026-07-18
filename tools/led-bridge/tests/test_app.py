@@ -139,6 +139,55 @@ class WorkerDisplayTest(unittest.TestCase):
         sent_names = [path.name for path in panel.sent]
         self.assertIn("order-order-40-ready.png", sent_names)
 
+    def test_multiple_ready_orders_use_ready_names_screen(self):
+        stop_event = threading.Event()
+        panel = FakePanel()
+        queue = ScriptedQueue(
+            stop_event,
+            [
+                event("order-39", 39, "ready"),
+                event("order-40", 40, "ready"),
+            ],
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = SimpleNamespace(
+                generated_dir=Path(tmp),
+                panel=SimpleNamespace(
+                    ready_display_seconds=0,
+                    status_display_seconds=0,
+                    rotation_seconds=3,
+                ),
+            )
+
+            run_worker(config, queue, panel, stop_event)
+
+        sent_names = [path.name for path in panel.sent]
+        self.assertIn("ready-names-page-1.png", sent_names)
+
+    def test_order_events_are_written_to_journal(self):
+        stop_event = threading.Event()
+        panel = FakePanel()
+        queue = ScriptedQueue(stop_event, [event("order-39", 39, "received")])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            log_path = Path(tmp) / "orders-log.txt"
+            config = SimpleNamespace(
+                generated_dir=Path(tmp),
+                event_log_path=log_path,
+                panel=SimpleNamespace(
+                    ready_display_seconds=0,
+                    status_display_seconds=0,
+                    rotation_seconds=3,
+                ),
+            )
+
+            run_worker(config, queue, panel, stop_event)
+            log_content = log_path.read_text(encoding="utf-8")
+
+        self.assertIn("#39", log_content)
+        self.assertIn("received", log_content)
+
     def test_five_active_orders_use_rush_summary(self):
         stop_event = threading.Event()
         panel = FakePanel()

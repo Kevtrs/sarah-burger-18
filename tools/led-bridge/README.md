@@ -19,7 +19,7 @@ Affichage :
 - le numero est affiche en petit en bas ;
 - le statut est affiche dans un bandeau en haut : `RECU`, `PREPA`, `PRET`, `SERVI` ou `ANNULE`.
 - une commande `PRET` passe en priorite plein ecran pour que l'invite voie son prenom.
-- s'il y a plusieurs commandes pretes, le mur fait tourner les prenoms a recuperer.
+- s'il y a plusieurs commandes pretes, le mur affiche une liste courte des prenoms a recuperer.
 - s'il y a plusieurs commandes actives, le mur passe en grille 2x2.
 - a partir de 5 commandes actives, le mur passe en mode `RUSH` avec les compteurs `PRET`, `PREPA` et `RECU`.
 - s'il n'y a aucune commande active, le mur affiche un ecran d'attente simple `SARAH BURGER`.
@@ -135,19 +135,25 @@ Verifier :
   "behavior": {
     "queue_existing_ready_on_start": false,
     "stuck_order_minutes": 15,
-    "stuck_repeat_minutes": 5
+    "stuck_repeat_minutes": 5,
+    "health_log_seconds": 30,
+    "config_reload_seconds": 1.5,
+    "event_log_path": "orders-log.txt"
   },
   "generated_dir": "generated"
 }
 ```
 
-`stand_open: false` affiche `STAND FERME` et coupe l'ecoute Firebase jusqu'au prochain redemarrage.
+`stand_open: false` affiche `STAND FERME`. Le bridge continue de suivre Firebase en arriere-plan et reprend l'affichage quand tu remets `true`.
 `high_contrast: true` force un rendu noir/blanc avec contours epais.
 `ready_display_seconds` controle la duree d'affichage d'une commande prete.
 `terminal_display_seconds` controle la duree tres courte des ecrans `SERVI` et `ANNULE`.
 `last_call_seconds` controle le passage de `PRET` a `DERNIER APPEL`.
 `rotation_seconds` controle la rotation quand plusieurs commandes actives sont affichees.
 `stuck_order_minutes` declenche une alerte console si une commande reste bloquee en `RECU` ou `PREPA`.
+`health_log_seconds` controle la frequence des logs de sante.
+`config_reload_seconds` controle la frequence de relecture automatique de `config.json`.
+`event_log_path` controle le chemin du journal local des commandes.
 
 ## 7. Disposition des panneaux
 
@@ -231,7 +237,8 @@ Quand une commande passe a `ready`, elle est placee dans une file.
 
 Si plusieurs burgers deviennent prets en meme temps :
 
-- chaque prenom pret est affiche en plein ecran ;
+- les prenoms prets sont regroupes sur un ecran `PRETS` ;
+- si une commande prete depasse `last_call_seconds`, elle repasse en priorite plein ecran `DERNIER APPEL` ;
 - l'ordre d'arrivee est conserve ;
 - une commande prete n'est pas perdue ;
 - un doublon `ready -> ready` est ignore.
@@ -242,9 +249,9 @@ S'il y a plus de quatre commandes actives, le mur affiche un resume `RUSH` avec 
 Si une commande reste `PRET` plus longtemps que `last_call_seconds`, elle passe en mode `DERNIER APPEL`.
 Apres une commande `served` ou `cancelled`, le panneau affiche une confirmation tres courte puis revient a l'attente ou au prochain etat disponible.
 
-## 12. Logs sante
+## 12. Logs sante et journal
 
-Toutes les 30 secondes, la fenetre du bridge affiche un etat court :
+Toutes les 30 secondes par defaut, la fenetre du bridge affiche un etat court :
 
 ```text
 Sante: Firebase OK | panneaux 4/4 OK | actifs 5 (PRET 1, PREPA 2, RECU 2) | dernier #39 PRET il y a 12s
@@ -258,6 +265,14 @@ Ca permet de verifier rapidement :
 - quel est le dernier changement recu.
 - si une commande est bloquee en `RECU` ou `PREPA` depuis trop longtemps.
 
+Le bridge ecrit aussi un journal local dans `orders-log.txt` :
+
+```text
+2026-07-18T19:42:10	change	#39	ready	Kevin	order-id
+```
+
+Il sert a relire la soiree ou comprendre un probleme apres coup. Il ne modifie pas Firebase.
+
 ## 13. Modes manuels utiles
 
 Pour fermer le stand sans toucher au code, ouvrir `config.json`, mettre :
@@ -266,7 +281,7 @@ Pour fermer le stand sans toucher au code, ouvrir `config.json`, mettre :
 "stand_open": false
 ```
 
-Puis relancer `LANCER.bat`. Le mur affiche `STAND FERME` et n'ecoute plus Firebase.
+Le mur affiche `STAND FERME` automatiquement, sans relancer `LANCER.bat`.
 
 Pour augmenter la lisibilite si les panneaux sont faibles ou en pleine lumiere, mettre :
 
@@ -274,7 +289,7 @@ Pour augmenter la lisibilite si les panneaux sont faibles ou en pleine lumiere, 
 "high_contrast": true
 ```
 
-Puis relancer `LANCER.bat`. Le mur passe en noir/blanc avec contours epais.
+Le mur passe en noir/blanc automatiquement, sans relancer `LANCER.bat`.
 
 ## 14. Si un panneau ne se connecte pas
 
@@ -351,8 +366,9 @@ Avant la soiree, verifie quand meme que le bridge se lance bien et que le pannea
 [ ] Une commande prete reste assez longtemps pour tester DERNIER APPEL
 [ ] Une commande servie ou annulee disparait vite
 [ ] Si un panneau est eteint, les autres continuent et la console indique le panneau manquant
-[ ] `stand_open: false` affiche STAND FERME apres redemarrage
-[ ] `high_contrast: true` affiche un rendu noir/blanc apres redemarrage
+[ ] `stand_open: false` affiche STAND FERME sans redemarrage
+[ ] `high_contrast: true` affiche un rendu noir/blanc sans redemarrage
+[ ] `orders-log.txt` se remplit quand les statuts changent
 [ ] Le programme redemarre correctement
 [ ] La page #stand fonctionne meme si le bridge est ferme
 ```

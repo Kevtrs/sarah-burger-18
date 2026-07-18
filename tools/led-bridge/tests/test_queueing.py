@@ -55,8 +55,17 @@ class DisplayQueueTest(unittest.TestCase):
         self.assertTrue(queue.enqueue(event("a", 18, "received", initial=True)))
         self.assertTrue(queue.enqueue(event("b", 19, "preparing", initial=True)))
 
-        self.assertEqual(queue.next_event().status, "preparing")
-        self.assertEqual(queue.next_event().status, "received")
+        self.assertEqual(queue.next_event().number, 18)
+        self.assertEqual(queue.next_event().number, 19)
+
+    def test_non_ready_events_prioritize_oldest_number(self):
+        queue = DisplayQueue()
+
+        self.assertTrue(queue.enqueue(event("newer", 42, "preparing")))
+        self.assertTrue(queue.enqueue(event("older", 40, "received")))
+
+        self.assertEqual(queue.next_event().number, 40)
+        self.assertEqual(queue.next_event().number, 42)
 
     def test_status_after_initial_snapshot_is_displayed(self):
         queue = DisplayQueue()

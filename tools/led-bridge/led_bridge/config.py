@@ -31,11 +31,14 @@ class BridgeConfig:
     firebase: FirebaseConfig
     panel: PanelConfig
     generated_dir: Path
+    event_log_path: Path
     queue_existing_ready_on_start: bool
     stand_open: bool
     high_contrast: bool
     stuck_order_minutes: float
     stuck_repeat_minutes: float
+    health_log_seconds: float
+    config_reload_seconds: float
 
 
 def _required_text(data: dict[str, Any], key: str) -> str:
@@ -113,6 +116,7 @@ def load_config(path: Path) -> BridgeConfig:
 
     generated_dir = root / raw.get("generated_dir", "generated")
     generated_dir.mkdir(parents=True, exist_ok=True)
+    event_log_path = root / behavior.get("event_log_path", raw.get("event_log_path", "orders-log.txt"))
 
     return BridgeConfig(
         firebase=FirebaseConfig(
@@ -132,9 +136,12 @@ def load_config(path: Path) -> BridgeConfig:
             brightness=brightness,
         ),
         generated_dir=generated_dir,
+        event_log_path=event_log_path,
         queue_existing_ready_on_start=bool(behavior.get("queue_existing_ready_on_start", False)),
         stand_open=_bool_value(raw.get("stand_open", behavior.get("stand_open")), True),
         high_contrast=_bool_value(raw.get("high_contrast", behavior.get("high_contrast")), False),
         stuck_order_minutes=float(behavior.get("stuck_order_minutes", raw.get("stuck_order_minutes", 15))),
         stuck_repeat_minutes=float(behavior.get("stuck_repeat_minutes", raw.get("stuck_repeat_minutes", 5))),
+        health_log_seconds=float(behavior.get("health_log_seconds", raw.get("health_log_seconds", 30))),
+        config_reload_seconds=float(behavior.get("config_reload_seconds", raw.get("config_reload_seconds", 1.5))),
     )

@@ -176,7 +176,7 @@ def _draw_order_slot(
 
 
 def _active_sort_key(event: OrderEvent) -> tuple[int, int]:
-    return (ACTIVE_SORT.get(event.status, 9), event.number)
+    return (event.number, ACTIVE_SORT.get(event.status, 9))
 
 
 def render_order_grid(
@@ -250,6 +250,46 @@ def render_rush_summary(events: list[OrderEvent], output_dir: Path, *, high_cont
         display.draw.text((58, y - 1), str(count), font=font(11, bold=True), fill=WHITE, anchor="ra")
 
     path = output_dir / "rush-summary.png"
+    display.save(path)
+    return path
+
+
+def render_ready_list(
+    events: list[OrderEvent],
+    output_dir: Path,
+    *,
+    page: int = 0,
+    high_contrast: bool = False,
+) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    ready_events = sorted([event for event in events if event.status == "ready"], key=lambda item: item.number)
+    if not ready_events:
+        return render_message("idle", output_dir, detail="SARAH", high_contrast=high_contrast)
+
+    display = VirtualDisplay64()
+    green = WHITE if high_contrast else STATUS_COLORS["ready"]
+    accent = WHITE if high_contrast else (255, 176, 42)
+    page_size = 3
+    page_count = (len(ready_events) + page_size - 1) // page_size
+    start = (page % page_count) * page_size
+    page_events = ready_events[start : start + page_size]
+
+    display.draw.rectangle((0, 0, 63, 63), outline=green, width=3 if high_contrast else 2)
+    display.draw.text((WIDTH // 2, 3), "PRETS", font=font(13, bold=True), fill=WHITE, anchor="ma")
+    display.draw.line((6, 18, 57, 18), fill=green, width=2)
+
+    y_positions = {1: [33], 2: [28, 43], 3: [24, 38, 52]}[len(page_events)]
+    for event, y in zip(page_events, y_positions):
+        name = _short_name(event.guest_name, max_chars=8)
+        name_font = _fit_font(name, max_size=13, min_size=7, max_width=43, max_height=12)
+        display.draw.text((5, y - 1), f"#{event.number}", font=font(5, bold=True), fill=accent, anchor="la")
+        display.draw.text((WIDTH // 2 + 4, y), name, font=name_font, fill=WHITE, anchor="mm")
+
+    if page_count > 1:
+        label = f"{(page % page_count) + 1}/{page_count}"
+        display.draw.text((60, 55), label, font=font(5, bold=True), fill=accent, anchor="ra")
+
+    path = output_dir / f"ready-names-page-{page + 1}.png"
     display.save(path)
     return path
 

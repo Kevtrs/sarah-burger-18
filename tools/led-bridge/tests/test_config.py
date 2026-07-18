@@ -34,6 +34,9 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(config.panel.terminal_display_seconds, 1)
         self.assertEqual(config.panel.last_call_seconds, 180)
         self.assertEqual(config.stuck_order_minutes, 15)
+        self.assertEqual(config.health_log_seconds, 30)
+        self.assertEqual(config.config_reload_seconds, 1.5)
+        self.assertEqual(config.event_log_path.name, "orders-log.txt")
 
     def test_stand_and_contrast_can_be_configured_at_root(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -54,6 +57,9 @@ class ConfigTest(unittest.TestCase):
                         },
                         "behavior": {
                             "stuck_order_minutes": 10,
+                            "health_log_seconds": 12,
+                            "config_reload_seconds": 0.5,
+                            "event_log_path": "logs/orders-test.txt",
                         },
                     }
                 ),
@@ -67,6 +73,9 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(config.panel.terminal_display_seconds, 0.5)
         self.assertEqual(config.panel.last_call_seconds, 60)
         self.assertEqual(config.stuck_order_minutes, 10)
+        self.assertEqual(config.health_log_seconds, 12)
+        self.assertEqual(config.config_reload_seconds, 0.5)
+        self.assertEqual(config.event_log_path.name, "orders-test.txt")
 
     def test_config_accepts_utf8_bom_from_windows_tools(self):
         with tempfile.TemporaryDirectory() as tmp:

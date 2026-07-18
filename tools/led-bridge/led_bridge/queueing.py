@@ -5,7 +5,7 @@ from collections import deque
 
 from .models import OrderEvent
 
-STATUS_PRIORITY = ("preparing", "ready", "received", "served", "cancelled")
+STATUS_PRIORITY = {"ready": 0, "received": 1, "preparing": 2, "served": 3, "cancelled": 4}
 
 
 class DisplayQueue:
@@ -54,13 +54,12 @@ class DisplayQueue:
                 self._ready_ids.discard(event.order_id)
                 return event
 
-            for status in STATUS_PRIORITY:
-                matches = [
-                    event for event in self._latest_by_order.values() if event.status == status
-                ]
-                if matches:
-                    event = sorted(matches, key=lambda item: item.number)[0]
-                    self._latest_by_order.pop(event.order_id, None)
-                    return event
+            if self._latest_by_order:
+                event = sorted(
+                    self._latest_by_order.values(),
+                    key=lambda item: (item.number, STATUS_PRIORITY.get(item.status, 9)),
+                )[0]
+                self._latest_by_order.pop(event.order_id, None)
+                return event
 
             return None
