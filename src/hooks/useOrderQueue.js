@@ -7,13 +7,6 @@ function pluralizeBurger(count) {
   return count > 1 ? "burgers" : "burger";
 }
 
-function estimateWait(aheadCount) {
-  if (aheadCount <= 0) return "moins de 5 min";
-  if (aheadCount <= 2) return "5 à 8 min";
-  if (aheadCount <= 5) return "10 à 15 min";
-  return "plus de 15 min";
-}
-
 function getEntryStatus(order) {
   return order?.lastStatus || order?.status || "received";
 }
@@ -32,7 +25,7 @@ export function buildQueueInfo(order, queueEntries, { snapshotReady = true, erro
       visible: true,
       tone: "muted",
       title: "File indisponible",
-      detail: "Le stand suit quand même ta commande.",
+      detail: "",
       shortLabel: "file indisponible",
       aheadCount: null,
     };
@@ -43,7 +36,7 @@ export function buildQueueInfo(order, queueEntries, { snapshotReady = true, erro
       visible: true,
       tone: "loading",
       title: "File en direct",
-      detail: "Calcul de ta position...",
+      detail: "",
       shortLabel: "calcul...",
       aheadCount: null,
     };
@@ -59,7 +52,7 @@ export function buildQueueInfo(order, queueEntries, { snapshotReady = true, erro
       visible: true,
       tone: "loading",
       title: "File en direct",
-      detail: "On recale ta position avec le stand.",
+      detail: "",
       shortLabel: "position en cours",
       aheadCount: null,
     };
@@ -72,7 +65,7 @@ export function buildQueueInfo(order, queueEntries, { snapshotReady = true, erro
       visible: true,
       tone: "hot",
       title: "Sur le grill",
-      detail: "La cuisine prépare ton burger maintenant.",
+      detail: "",
       shortLabel: "en préparation",
       aheadCount,
     };
@@ -83,7 +76,7 @@ export function buildQueueInfo(order, queueEntries, { snapshotReady = true, erro
       visible: true,
       tone: "next",
       title: "Tu es le prochain",
-      detail: "Attente estimée : moins de 5 min.",
+      detail: "",
       shortLabel: "prochain",
       aheadCount,
     };
@@ -93,7 +86,7 @@ export function buildQueueInfo(order, queueEntries, { snapshotReady = true, erro
     visible: true,
     tone: "waiting",
     title: `${aheadCount} ${pluralizeBurger(aheadCount)} avant toi`,
-    detail: `Attente estimée : ${estimateWait(aheadCount)}.`,
+    detail: "",
     shortLabel: `${aheadCount} avant`,
     aheadCount,
   };

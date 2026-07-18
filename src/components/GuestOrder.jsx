@@ -388,6 +388,8 @@ export function GuestOrder({ store }) {
     setError("");
 
     try {
+      await readyAlert.enableAlerts({ silent: true });
+
       const createdOrders = [];
       for (const item of items) {
         const created = await store.createOrder({
@@ -1500,7 +1502,6 @@ function OrderQueueCard({ info }) {
       <Clock3 aria-hidden="true" />
       <div>
         <strong>{info.title}</strong>
-        <span>{info.detail}</span>
       </div>
     </section>
   );
@@ -1532,23 +1533,13 @@ function ReadyAlertPanel({ readyAlert, anyReady }) {
     readyAlert.trackedOrders.length > 0 &&
     readyAlert.trackedOrders.every((item) => item.lastStatus === "served" || item.lastStatus === "cancelled");
 
+  if (!anyReady && !readyAlert.canTestAlert) return null;
+
   return (
     <div className={`ready-alert-panel ${anyReady ? "ready" : ""}`} aria-live="polite">
       {anyReady ? (
         <strong>Ta commande est prête !</strong>
-      ) : (
-        <p>Garde cette page ouverte pour être averti lorsque ta commande est prête.</p>
-      )}
-
-      {!anyReady && !isFinished && !readyAlert.audioUnlocked && (
-        <button className="secondary-action compact ready-alert-button" type="button" onClick={readyAlert.enableAlerts}>
-          Activer le son
-        </button>
-      )}
-
-      {!anyReady && !isFinished && readyAlert.audioUnlocked && (
-        <span className="ready-alert-state">Alerte de page activée</span>
-      )}
+      ) : null}
 
       {readyAlert.message && <small>{readyAlert.message}</small>}
       {readyAlert.canTestAlert && !isFinished && (

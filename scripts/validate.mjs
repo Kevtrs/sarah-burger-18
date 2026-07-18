@@ -325,9 +325,6 @@ async function run() {
     status: await page.locator(".status-pill").innerText(),
   };
 
-  await page.locator(".ready-alert-button").click();
-  await page.locator(".ready-alert-state", { hasText: "Alerte de page activée" }).waitFor();
-
   const readyPermission = await page.evaluate(() => ({
     readyAlertSoundPlays: window.__readyAlertSoundPlays,
     stored: JSON.parse(window.localStorage.getItem("sarah-burger-ready-alert-v2")),
@@ -453,8 +450,6 @@ async function run() {
   const deniedPage = await mobileContext.newPage();
   recordErrors(deniedPage, consoleErrors);
   await submitOrderFromPage(deniedPage, "Noe", 0, 2);
-  await deniedPage.locator(".ready-alert-button").click();
-  await deniedPage.locator(".ready-alert-panel", { hasText: "Garde cette page ouverte" }).waitFor();
 
   const deniedPermission = await deniedPage.evaluate(() => ({
     stored: JSON.parse(window.localStorage.getItem("sarah-burger-ready-alert-v2")),

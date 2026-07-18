@@ -122,7 +122,7 @@ export function useReadyOrderAlert(store) {
         return { ...current, orders: [...others, entry] };
       });
 
-      setMessage("Garde cette page ouverte pour être averti lorsque tes commandes sont prêtes.");
+      setMessage("");
     },
     [updateState],
   );
@@ -134,18 +134,14 @@ export function useReadyOrderAlert(store) {
     updateState({ audioUnlocked: false, orders: [] });
   }, [updateState]);
 
-  const enableAlerts = useCallback(async () => {
-    if (!state.orders.length) return;
-
+  const enableAlerts = useCallback(async ({ silent = false } = {}) => {
     const audioUnlocked = await unlockAudio(audioRef);
     updateState((current) => ({ ...current, audioUnlocked }));
 
-    setMessage(
-      audioUnlocked
-        ? "Alerte de page activée. Garde cette page ouverte."
-        : "Garde cette page ouverte pour être averti lorsque tes commandes sont prêtes.",
-    );
-  }, [state.orders.length, updateState]);
+    if (!silent) {
+      setMessage(audioUnlocked ? "Alerte de page activée." : "");
+    }
+  }, [updateState]);
 
   const fireReadyAlert = useCallback(
     async (orderId, { test = false } = {}) => {
@@ -194,7 +190,7 @@ export function useReadyOrderAlert(store) {
           }
         },
         () => {
-          setMessage("Garde cette page ouverte pour être averti lorsque tes commandes sont prêtes.");
+          setMessage("");
         },
       ),
     );
