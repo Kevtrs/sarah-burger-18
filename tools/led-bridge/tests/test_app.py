@@ -59,6 +59,7 @@ class WorkerDisplayTest(unittest.TestCase):
 
         sent_names = [path.name for path in panel.sent]
         self.assertIn("startup.png", sent_names)
+        self.assertIn("new-order-39.png", sent_names)
         self.assertIn("order-order-39-received.png", sent_names)
         self.assertNotIn("idle.png", sent_names)
 
@@ -85,7 +86,7 @@ class WorkerDisplayTest(unittest.TestCase):
             elapsed = time.monotonic() - started_at
 
         sent_names = [path.name for path in panel.sent]
-        self.assertIn("order-order-39-received.png", sent_names)
+        self.assertIn("new-order-39.png", sent_names)
         self.assertIn("order-order-39-preparing.png", sent_names)
         self.assertLess(elapsed, 0.8)
 
@@ -139,6 +140,8 @@ class WorkerDisplayTest(unittest.TestCase):
             run_worker(config, queue, panel, stop_event)
 
         sent_names = [path.name for path in panel.sent]
+        self.assertIn("ready-alert-order-40-0.png", sent_names)
+        self.assertIn("ready-alert-order-40-1.png", sent_names)
         self.assertIn("order-order-40-ready.png", sent_names)
 
     def test_multiple_ready_orders_use_ready_names_screen(self):

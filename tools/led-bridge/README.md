@@ -19,6 +19,9 @@ Affichage :
 - le numero est affiche en petit en bas ;
 - le statut est affiche dans un bandeau en haut : `RECU`, `PREPA`, `PRET`, `SERVI` ou `ANNULE`.
 - une commande `PRET` passe en priorite plein ecran pour que l'invite voie son prenom.
+- une nouvelle commande affiche un badge `NEW` tres court.
+- une commande qui passe `PRET` declenche une petite animation d'appel, sans GIF.
+- une commande `PRET` alterne ensuite entre le prenom et `COMMANDE PRETE`.
 - s'il y a plusieurs commandes pretes, le mur affiche une liste courte des prenoms a recuperer.
 - s'il y a plusieurs commandes actives, le mur passe en grille 2x2.
 - a partir de 5 commandes actives, le mur passe en mode `RUSH` avec les compteurs `PRET`, `PREPA` et `RECU`.
@@ -121,6 +124,9 @@ Verifier :
     "terminal_display_seconds": 1,
     "last_call_seconds": 180,
     "rotation_seconds": 3,
+    "ready_pulse_seconds": 1.2,
+    "ready_animation_frame_seconds": 0.45,
+    "new_badge_seconds": 0.9,
     "reconnect_delay_seconds": 5,
     "brightness": null
   },
@@ -150,6 +156,9 @@ Verifier :
 `terminal_display_seconds` controle la duree tres courte des ecrans `SERVI` et `ANNULE`.
 `last_call_seconds` controle le passage de `PRET` a `DERNIER APPEL`.
 `rotation_seconds` controle la rotation quand plusieurs commandes actives sont affichees.
+`ready_pulse_seconds` controle l'alternance prenom / `COMMANDE PRETE`.
+`ready_animation_frame_seconds` controle la vitesse du flash quand une commande passe `PRET`.
+`new_badge_seconds` controle la duree du badge `NEW`.
 `stuck_order_minutes` declenche une alerte console si une commande reste bloquee en `RECU` ou `PREPA`.
 `health_log_seconds` controle la frequence des logs de sante.
 `config_reload_seconds` controle la frequence de relecture automatique de `config.json`.

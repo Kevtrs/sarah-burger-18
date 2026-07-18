@@ -19,9 +19,12 @@ from .renderer import (
     RUSH_THRESHOLD,
     render_last_call,
     render_message,
+    render_new_badge,
     render_order,
     render_order_grid,
+    render_ready_alert_frame,
     render_ready_list,
+    render_ready_pulse,
     render_rush_summary,
 )
 
@@ -158,6 +161,7 @@ def _send_ready_focus(
     last_call_seconds: float = 180,
     index: int | None = None,
     total: int | None = None,
+    pulse_phase: int = 0,
 ) -> None:
     suffix = f" ({index}/{total})" if index is not None and total else ""
     name = f" {event.guest_name}" if event.guest_name else ""
@@ -168,7 +172,7 @@ def _send_ready_focus(
         return
 
     log(f"A recuperer{suffix}: #{event.number}{name}")
-    panel.send_image(render_order(event, generated_dir, high_contrast=high_contrast))
+    panel.send_image(render_ready_pulse(event, generated_dir, phase=pulse_phase, high_contrast=high_contrast))
 
 
 def display_active_events(
@@ -206,6 +210,7 @@ def display_active_events(
                 last_call_seconds=last_call_seconds,
                 index=(page % len(last_call_events)) + 1,
                 total=len(last_call_events),
+                pulse_phase=page,
             )
             return
 
@@ -235,6 +240,7 @@ def display_active_events(
                     last_call_seconds=last_call_seconds,
                     index=slot + 1,
                     total=len(ready_list),
+                    pulse_phase=page,
                 )
                 return
 
@@ -262,6 +268,7 @@ def display_active_events(
                 last_call_seconds=last_call_seconds,
                 index=slot + 1,
                 total=len(ready_list),
+                pulse_phase=page,
             )
             return
 
@@ -347,7 +354,14 @@ def log_stuck_orders(
 def should_rotate_active_display(active_events: dict[str, OrderEvent]) -> bool:
     if len(active_events) >= RUSH_THRESHOLD:
         return True
-    return bool(_ready_list(active_events)) and len(active_events) > 1
+    return bool(_ready_list(active_events))
+
+
+def rotation_delay_seconds(config, active_events: dict[str, OrderEvent]) -> float:
+    ready_list = _ready_list(active_events)
+    if len(ready_list) == 1 and len(active_events) == 1:
+        return _panel_value(config, "ready_pulse_seconds", 1.2)
+    return config.panel.rotation_seconds
 
 
 def wait_for_next_event(queue: DisplayQueue, stop_event: threading.Event, delay: float):
@@ -364,6 +378,67 @@ def wait_for_next_event(queue: DisplayQueue, stop_event: threading.Event, delay:
         if event is not None:
             return event
 
+    return None
+
+
+def _send_interruptible_image(
+    panel: PixelPanel,
+    image_path: Path,
+    queue: DisplayQueue,
+    stop_event: threading.Event,
+    delay: float,
+) -> OrderEvent | None:
+    panel.send_image(image_path)
+    return wait_for_next_event(queue, stop_event, delay)
+
+
+def _play_new_badge(
+    panel: PixelPanel,
+    config,
+    event: OrderEvent,
+    queue: DisplayQueue,
+    stop_event: threading.Event,
+    *,
+    high_contrast: bool = False,
+) -> OrderEvent | None:
+    delay = _panel_value(config, "new_badge_seconds", 0.9)
+    if delay <= 0 or event.initial:
+        return None
+
+    log(f"Nouvelle commande: #{event.number} {event.guest_name}".rstrip())
+    return _send_interruptible_image(
+        panel,
+        render_new_badge(event, config.generated_dir, high_contrast=high_contrast),
+        queue,
+        stop_event,
+        delay,
+    )
+
+
+def _play_ready_alert(
+    panel: PixelPanel,
+    config,
+    event: OrderEvent,
+    queue: DisplayQueue,
+    stop_event: threading.Event,
+    *,
+    high_contrast: bool = False,
+) -> OrderEvent | None:
+    delay = _panel_value(config, "ready_animation_frame_seconds", 0.45)
+    if delay <= 0 or event.initial:
+        return None
+
+    log(f"Animation pret: #{event.number} {event.guest_name}".rstrip())
+    for frame in (0, 1, 0):
+        pending = _send_interruptible_image(
+            panel,
+            render_ready_alert_frame(event, config.generated_dir, frame=frame, high_contrast=high_contrast),
+            queue,
+            stop_event,
+            delay,
+        )
+        if pending is not None:
+            return pending
     return None
 
 
@@ -510,7 +585,7 @@ def run_worker(
             if active_events:
                 if (
                     should_rotate_active_display(active_events)
-                    and time.monotonic() - last_rotation >= current_config.panel.rotation_seconds
+                    and time.monotonic() - last_rotation >= rotation_delay_seconds(current_config, active_events)
                 ):
                     active_page += 1
                     try:
@@ -535,18 +610,45 @@ def run_worker(
         last_event_at = time.monotonic()
         _journal_event(current_config, event)
         try:
+            previous_event = active_events.get(event.order_id)
             _update_active_state(event, active_events, status_since, stuck_logged_at)
             if event.status in ACTIVE_STATUSES:
                 active_page = 0
-                if event.status == "ready":
-                    _send_ready_focus(
+                if event.status == "received" and previous_event is None:
+                    pending_event = _play_new_badge(
                         panel,
-                        current_config.generated_dir,
+                        current_config,
                         event,
+                        queue,
+                        stop_event,
                         high_contrast=high_contrast,
-                        ready_since=status_since.get(event.order_id),
-                        last_call_seconds=_panel_value(current_config, "last_call_seconds", 180),
                     )
+                    if pending_event is not None:
+                        continue
+
+                if event.status == "ready":
+                    pending_event = _play_ready_alert(
+                        panel,
+                        current_config,
+                        event,
+                        queue,
+                        stop_event,
+                        high_contrast=high_contrast,
+                    )
+                    if pending_event is not None:
+                        continue
+
+                    if len(_ready_list(active_events)) >= 2:
+                        _show_current_state(panel, current_config, active_events, status_since, page=active_page)
+                    else:
+                        _send_ready_focus(
+                            panel,
+                            current_config.generated_dir,
+                            event,
+                            high_contrast=high_contrast,
+                            ready_since=status_since.get(event.order_id),
+                            last_call_seconds=_panel_value(current_config, "last_call_seconds", 180),
+                        )
                 else:
                     _show_current_state(panel, current_config, active_events, status_since, page=active_page)
             else:
@@ -567,7 +669,8 @@ def run_worker(
                 pass
 
         if event.status == "ready":
-            delay = current_config.panel.ready_display_seconds
+            pulse_delay = _panel_value(current_config, "ready_pulse_seconds", 1.2)
+            delay = pulse_delay if pulse_delay > 0 else current_config.panel.ready_display_seconds
         elif event.status in TERMINAL_STATUSES:
             delay = _panel_value(current_config, "terminal_display_seconds", 1)
         else:

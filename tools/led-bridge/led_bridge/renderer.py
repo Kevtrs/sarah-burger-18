@@ -131,6 +131,81 @@ def render_order(event: OrderEvent, output_dir: Path, *, high_contrast: bool = F
     return path
 
 
+def render_new_badge(event: OrderEvent, output_dir: Path, *, high_contrast: bool = False) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    display = VirtualDisplay64()
+    pink = WHITE if high_contrast else (232, 20, 82)
+    yellow = WHITE if high_contrast else STATUS_COLORS["received"]
+
+    display.draw.rectangle((0, 0, 63, 63), outline=yellow, width=3 if high_contrast else 2)
+    display.draw.rectangle((3, 3, 60, 18), fill=WHITE if high_contrast else _status_dim(pink), outline=pink)
+    display.draw.text(
+        (WIDTH // 2, 4),
+        "NEW",
+        font=font(14, bold=True),
+        fill=BLACK if high_contrast else WHITE,
+        anchor="ma",
+    )
+    _draw_guest_name(display, event.guest_name)
+    display.draw.text((WIDTH // 2, 53), f"#{event.number}", font=font(8, bold=True), fill=yellow, anchor="ma")
+
+    path = output_dir / f"new-{_safe_filename(event.order_id)}.png"
+    display.save(path)
+    return path
+
+
+def render_ready_alert_frame(
+    event: OrderEvent,
+    output_dir: Path,
+    *,
+    frame: int = 0,
+    high_contrast: bool = False,
+) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    display = VirtualDisplay64()
+    green = WHITE if high_contrast else STATUS_COLORS["ready"]
+    yellow = WHITE if high_contrast else (255, 176, 42)
+    border = green if frame % 2 == 0 else WHITE
+
+    display.draw.rectangle((0, 0, 63, 63), outline=border, width=3)
+    if frame % 2 == 0:
+        display.draw.rectangle((4, 4, 59, 18), fill=WHITE if high_contrast else _status_dim(green), outline=green)
+        display.draw.text((WIDTH // 2, 5), "PRET", font=font(13, bold=True), fill=BLACK if high_contrast else WHITE, anchor="ma")
+        _draw_guest_name(display, event.guest_name)
+    else:
+        display.draw.text((WIDTH // 2, 9), "A TABLE", font=font(10, bold=True), fill=yellow, anchor="ma")
+        _draw_guest_name(display, event.guest_name)
+        display.draw.text((WIDTH // 2, 49), "PRET", font=font(11, bold=True), fill=green, anchor="ma")
+
+    display.draw.text((WIDTH // 2, 57), f"#{event.number}", font=font(6, bold=True), fill=WHITE, anchor="ma")
+    path = output_dir / f"ready-alert-{_safe_filename(event.order_id)}-{frame % 2}.png"
+    display.save(path)
+    return path
+
+
+def render_ready_pulse(
+    event: OrderEvent,
+    output_dir: Path,
+    *,
+    phase: int = 0,
+    high_contrast: bool = False,
+) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if phase % 2 == 0:
+        return render_order(event, output_dir, high_contrast=high_contrast)
+
+    display = VirtualDisplay64()
+    green = WHITE if high_contrast else STATUS_COLORS["ready"]
+    display.draw.rectangle((0, 0, 63, 63), outline=green, width=3 if high_contrast else 2)
+    display.draw.text((WIDTH // 2, 10), "COMMANDE", font=font(8, bold=True), fill=WHITE, anchor="ma")
+    display.draw.text((WIDTH // 2, 26), "PRETE", font=font(18, bold=True), fill=green, anchor="ma")
+    display.draw.text((WIDTH // 2, 48), f"#{event.number}", font=font(9, bold=True), fill=WHITE, anchor="ma")
+
+    path = output_dir / f"ready-pulse-{_safe_filename(event.order_id)}-{phase % 2}.png"
+    display.save(path)
+    return path
+
+
 def _short_name(value: str, max_chars: int = 7) -> str:
     cleaned = _clean_display_name(value)
     if len(cleaned) <= max_chars:

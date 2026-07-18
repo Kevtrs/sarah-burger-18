@@ -33,6 +33,9 @@ class ConfigTest(unittest.TestCase):
         self.assertFalse(config.high_contrast)
         self.assertEqual(config.panel.terminal_display_seconds, 1)
         self.assertEqual(config.panel.last_call_seconds, 180)
+        self.assertEqual(config.panel.ready_pulse_seconds, 1.2)
+        self.assertEqual(config.panel.ready_animation_frame_seconds, 0.45)
+        self.assertEqual(config.panel.new_badge_seconds, 0.9)
         self.assertEqual(config.stuck_order_minutes, 15)
         self.assertEqual(config.health_log_seconds, 30)
         self.assertEqual(config.config_reload_seconds, 1.5)
@@ -54,6 +57,9 @@ class ConfigTest(unittest.TestCase):
                             "bluetooth_address": "AA:BB:CC:DD:EE:FF",
                             "terminal_display_seconds": 0.5,
                             "last_call_seconds": 60,
+                            "ready_pulse_seconds": 0.8,
+                            "ready_animation_frame_seconds": 0.2,
+                            "new_badge_seconds": 0.4,
                         },
                         "behavior": {
                             "stuck_order_minutes": 10,
@@ -72,6 +78,9 @@ class ConfigTest(unittest.TestCase):
         self.assertTrue(config.high_contrast)
         self.assertEqual(config.panel.terminal_display_seconds, 0.5)
         self.assertEqual(config.panel.last_call_seconds, 60)
+        self.assertEqual(config.panel.ready_pulse_seconds, 0.8)
+        self.assertEqual(config.panel.ready_animation_frame_seconds, 0.2)
+        self.assertEqual(config.panel.new_badge_seconds, 0.4)
         self.assertEqual(config.stuck_order_minutes, 10)
         self.assertEqual(config.health_log_seconds, 12)
         self.assertEqual(config.config_reload_seconds, 0.5)

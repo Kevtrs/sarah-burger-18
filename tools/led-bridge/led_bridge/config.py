@@ -22,6 +22,9 @@ class PanelConfig:
     terminal_display_seconds: float
     last_call_seconds: float
     rotation_seconds: float
+    ready_pulse_seconds: float
+    ready_animation_frame_seconds: float
+    new_badge_seconds: float
     reconnect_delay_seconds: float
     brightness: int | None
 
@@ -132,6 +135,9 @@ def load_config(path: Path) -> BridgeConfig:
             terminal_display_seconds=float(panel.get("terminal_display_seconds", 1)),
             last_call_seconds=float(panel.get("last_call_seconds", 180)),
             rotation_seconds=float(panel.get("rotation_seconds", 3)),
+            ready_pulse_seconds=float(panel.get("ready_pulse_seconds", 1.2)),
+            ready_animation_frame_seconds=float(panel.get("ready_animation_frame_seconds", 0.45)),
+            new_badge_seconds=float(panel.get("new_badge_seconds", 0.9)),
             reconnect_delay_seconds=float(panel.get("reconnect_delay_seconds", 5)),
             brightness=brightness,
         ),

@@ -11,9 +11,12 @@ from led_bridge.renderer import (
     choose_number_font,
     render_last_call,
     render_message,
+    render_new_badge,
     render_order,
     render_order_grid,
+    render_ready_alert_frame,
     render_ready_list,
+    render_ready_pulse,
     render_rush_summary,
     text_size,
 )
@@ -104,6 +107,30 @@ class RendererTest(unittest.TestCase):
             with Image.open(path) as image:
                 self.assertEqual(image.size, (64, 64))
                 self.assertIsNotNone(image.crop((2, 18, 62, 58)).getbbox())
+
+    def test_new_badge_render(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            event = validate_order_event(
+                {"orderId": "order-39", "number": 39, "guestName": "Kevin", "status": "received"}
+            )
+            path = render_new_badge(event, Path(tmp))
+            with Image.open(path) as image:
+                self.assertEqual(image.size, (64, 64))
+                self.assertIsNotNone(image.getbbox())
+
+    def test_ready_alert_and_pulse_render(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            event = validate_order_event(
+                {"orderId": "order-39", "number": 39, "guestName": "Kevin", "status": "ready"}
+            )
+            for path in (
+                render_ready_alert_frame(event, Path(tmp), frame=0),
+                render_ready_alert_frame(event, Path(tmp), frame=1),
+                render_ready_pulse(event, Path(tmp), phase=1),
+            ):
+                with Image.open(path) as image:
+                    self.assertEqual(image.size, (64, 64))
+                    self.assertIsNotNone(image.getbbox())
 
     def test_last_call_render(self):
         with tempfile.TemporaryDirectory() as tmp:
