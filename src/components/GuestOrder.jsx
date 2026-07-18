@@ -85,9 +85,12 @@ export function GuestOrder({ store }) {
     return sessionStorage.getItem(introStorageKey) !== "yes";
   });
   const [isAddBurgerOpen, setIsAddBurgerOpen] = useState(false);
+  const [showGroupPrompt, setShowGroupPrompt] = useState(false);
   const submitTimersRef = useRef([]);
   const clientRequestIdRef = useRef(makeClientRequestId());
   const hasResumedOrderRef = useRef(false);
+  const hasShownGroupPromptRef = useRef(false);
+  const groupPromptTimerRef = useRef(null);
   const readyAlert = useReadyOrderAlert(store);
 
   const trimmedName = guestName.trim();
@@ -138,6 +141,7 @@ export function GuestOrder({ store }) {
   useEffect(
     () => () => {
       submitTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      if (groupPromptTimerRef.current) window.clearTimeout(groupPromptTimerRef.current);
     },
     [],
   );
@@ -184,6 +188,13 @@ export function GuestOrder({ store }) {
     const nextStep = steps[index + 1];
     withViewTransition(() => flushSync(() => setStep(nextStep)), `${step}-to-${nextStep}`);
     window.scrollTo({ top: 0, behavior: "auto" });
+
+    if (nextStep === "review" && !hasShownGroupPromptRef.current && cart.length === 0) {
+      hasShownGroupPromptRef.current = true;
+      groupPromptTimerRef.current = window.setTimeout(() => {
+        setShowGroupPrompt(true);
+      }, 650);
+    }
   }
 
   function goBack() {
@@ -198,7 +209,12 @@ export function GuestOrder({ store }) {
 
   function openAddBurgerModal() {
     setError("");
+    setShowGroupPrompt(false);
     setIsAddBurgerOpen(true);
+  }
+
+  function dismissGroupPrompt() {
+    setShowGroupPrompt(false);
   }
 
   function closeAddBurgerModal() {
@@ -288,6 +304,11 @@ export function GuestOrder({ store }) {
   function reset() {
     clearSubmitTimers();
     readyAlert.clearTrackedOrders();
+    hasShownGroupPromptRef.current = false;
+    if (groupPromptTimerRef.current) {
+      window.clearTimeout(groupPromptTimerRef.current);
+      groupPromptTimerRef.current = null;
+    }
     withViewTransition(() => {
       flushSync(() => {
         setStep("identity");
@@ -299,6 +320,7 @@ export function GuestOrder({ store }) {
         setIsSubmitting(false);
         setSubmitState("idle");
         setShowConfetti(false);
+        setShowGroupPrompt(false);
         clientRequestIdRef.current = makeClientRequestId();
       });
     }, "done-to-identity");
@@ -444,6 +466,10 @@ export function GuestOrder({ store }) {
             )}
           </div>
         </section>
+      )}
+
+      {showGroupPrompt && (
+        <GroupOrderPrompt onAddBurger={openAddBurgerModal} onDismiss={dismissGroupPrompt} />
       )}
 
       {isAddBurgerOpen && (
@@ -677,6 +703,46 @@ function SaucesGrid({ selectedSauces, onToggle }) {
             </button>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+function GroupOrderPrompt({ onAddBurger, onDismiss }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onDismiss}>
+      <div
+        className="modal-sheet modal-sheet-compact"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="group-prompt-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="modal-sheet__header">
+          <h2 id="group-prompt-title">Tu commandes pour d&apos;autres aussi ?</h2>
+          <button className="modal-sheet__close" type="button" onClick={onDismiss} aria-label="Fermer">
+            <X aria-hidden="true" />
+          </button>
+        </header>
+
+        <div className="modal-sheet__body">
+          <p>
+            Si tu commandes aussi pour tes enfants ou des proches, ajoute leur burger maintenant :
+            chaque burger aura son propre numéro de ticket.
+          </p>
+        </div>
+
+        <div className="modal-sheet__footer">
+          <button className="secondary-action cta-button" type="button" onClick={onDismiss}>
+            Non, juste moi
+          </button>
+          <button className="primary-action cta-button" type="button" onClick={onAddBurger}>
+            <span className="cta-button__base" aria-hidden="true" />
+            <span className="cta-button__shine" aria-hidden="true" />
+            <UserPlus aria-hidden="true" />
+            Oui, ajouter un burger
+          </button>
+        </div>
       </div>
     </div>
   );
