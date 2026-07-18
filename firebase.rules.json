@@ -216,6 +216,36 @@
             }
           }
         },
+        "queuePublic": {
+          ".read": "auth != null",
+          ".write": false,
+          ".indexOn": ["number", "status"],
+          "$orderId": {
+            ".write": "auth != null && (root.child('kitchenUsers').child(auth.uid).val() == true || (!data.exists() && newData.exists() && root.child('sessions').child($sessionId).child('orders').child($orderId).child('guestUid').val() == auth.uid && root.child('sessions').child($sessionId).child('orders').child($orderId).child('status').val() == 'received' && newData.child('status').val() == 'received'))",
+            ".validate": "newData.hasChildren(['id', 'sessionId', 'number', 'status', 'createdAtMs', 'updatedAtMs'])",
+            "id": {
+              ".validate": "newData.isString() && newData.val() == $orderId && newData.val().length >= 8 && newData.val().length <= 80"
+            },
+            "sessionId": {
+              ".validate": "newData.isString() && newData.val() == $sessionId"
+            },
+            "number": {
+              ".validate": "newData.isNumber() && newData.val() == root.child('sessions').child($sessionId).child('orders').child($orderId).child('number').val()"
+            },
+            "status": {
+              ".validate": "newData.isString() && (newData.val() == 'received' || newData.val() == 'preparing' || newData.val() == 'ready' || newData.val() == 'served' || newData.val() == 'cancelled')"
+            },
+            "createdAtMs": {
+              ".validate": "newData.isNumber()"
+            },
+            "updatedAtMs": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
         "orderMessages": {
           ".read": "auth != null && root.child('kitchenUsers').child(auth.uid).val() == true",
           ".write": false,

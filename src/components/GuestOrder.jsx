@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   Check,
   CheckCircle2,
+  Clock3,
   RotateCcw,
   Send,
   Sparkles,
@@ -23,6 +24,7 @@ import {
   toppings,
 } from "../data/menu";
 import { useReadyOrderAlert } from "../hooks/useReadyOrderAlert";
+import { useOrderQueue } from "../hooks/useOrderQueue";
 import { OrderMessages } from "./OrderMessages";
 
 const steps = ["identity", "customize", "review", "done"];
@@ -121,6 +123,7 @@ export function GuestOrder({ store }) {
   const hasShownGroupPromptRef = useRef(false);
   const groupPromptTimerRef = useRef(null);
   const readyAlert = useReadyOrderAlert(store);
+  const orderQueue = useOrderQueue(store, readyAlert.trackedOrders);
 
   const trimmedName = guestName.trim();
   const isDuplicateName = useMemo(
@@ -557,9 +560,19 @@ export function GuestOrder({ store }) {
 
       {step === "done" && readyAlert.trackedOrders.length > 0 && (
         readyAlert.trackedOrders.length === 1 ? (
-          <SingleDoneScreen entry={readyAlert.trackedOrders[0]} readyAlert={readyAlert} store={store} />
+          <SingleDoneScreen
+            entry={readyAlert.trackedOrders[0]}
+            orderQueue={orderQueue}
+            readyAlert={readyAlert}
+            store={store}
+          />
         ) : (
-          <GroupDoneScreen orders={readyAlert.trackedOrders} readyAlert={readyAlert} store={store} />
+          <GroupDoneScreen
+            orderQueue={orderQueue}
+            orders={readyAlert.trackedOrders}
+            readyAlert={readyAlert}
+            store={store}
+          />
         )
       )}
 
@@ -1115,9 +1128,10 @@ function SelectedItemsRow({ toppings: toppingIds, sauces: sauceIds, nachos, comp
   );
 }
 
-function SingleDoneScreen({ entry, readyAlert, store }) {
+function SingleDoneScreen({ entry, orderQueue, readyAlert, store }) {
   const isReady = entry.lastStatus === "ready";
   const messagesDisabled = entry.lastStatus === "served" || entry.lastStatus === "cancelled";
+  const queueInfo = orderQueue.getInfo(entry);
 
   return (
     <section
@@ -1142,6 +1156,7 @@ function SingleDoneScreen({ entry, readyAlert, store }) {
           ? "Viens la récupérer au stand Sarah Burger."
           : "Ta commande entre en cuisine. Garde bien ton numéro."}
       </p>
+      <OrderQueueCard info={queueInfo} />
       <div className="success-ticket" aria-hidden="true">
         <span>SARAH BURGER</span>
         <strong>#{entry.number}</strong>
@@ -1162,8 +1177,10 @@ function SingleDoneScreen({ entry, readyAlert, store }) {
   );
 }
 
-function GroupDoneScreen({ orders, readyAlert, store }) {
+function GroupDoneScreen({ orderQueue, orders, readyAlert, store }) {
   const anyReady = orders.some((item) => item.lastStatus === "ready");
+  const queueInfos = orders.map((item) => ({ order: item, info: orderQueue.getInfo(item) }));
+  const visibleQueueInfos = queueInfos.filter((item) => item.info.visible);
 
   return (
     <section
@@ -1191,6 +1208,7 @@ function GroupDoneScreen({ orders, readyAlert, store }) {
         })}
       </ul>
       <p className="success-note muted">Garde ces numéros. Viens récupérer chaque burger dès qu&apos;il est prêt.</p>
+      <GroupQueueCard items={visibleQueueInfos} />
       <ReadyAlertPanel readyAlert={readyAlert} anyReady={anyReady} />
       <div className="group-message-panels">
         {orders.map((item) => (
@@ -1203,6 +1221,41 @@ function GroupDoneScreen({ orders, readyAlert, store }) {
             store={store}
           />
         ))}
+      </div>
+    </section>
+  );
+}
+
+function OrderQueueCard({ info }) {
+  if (!info.visible) return null;
+
+  return (
+    <section className={`order-queue-card queue-${info.tone}`} aria-live="polite">
+      <Clock3 aria-hidden="true" />
+      <div>
+        <strong>{info.title}</strong>
+        <span>{info.detail}</span>
+      </div>
+    </section>
+  );
+}
+
+function GroupQueueCard({ items }) {
+  if (!items.length) return null;
+
+  return (
+    <section className="order-queue-card order-queue-card-group" aria-live="polite">
+      <Clock3 aria-hidden="true" />
+      <div>
+        <strong>File en direct</strong>
+        <ul>
+          {items.map(({ order, info }) => (
+            <li key={order.orderId}>
+              <span>{order.guestName}</span>
+              <b>{info.shortLabel}</b>
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   );

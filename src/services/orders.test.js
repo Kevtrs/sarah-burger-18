@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { assertValidFirebaseKey, createOrderStore, normalizeOrder } from "./orders";
+import { assertValidFirebaseKey, createOrderStore, normalizeOrder, normalizeQueueEntry } from "./orders";
 
 describe("normalizeOrder", () => {
   it("falls back to received for an invalid status", () => {
@@ -110,6 +110,30 @@ describe("assertValidFirebaseKey", () => {
   });
 });
 
+describe("normalizeQueueEntry", () => {
+  it("keeps only the public queue fields needed by guests", () => {
+    const entry = normalizeQueueEntry({
+      id: "order-queue1",
+      sessionId: "sarah-18-2026",
+      number: "28",
+      status: "preparing",
+      guestName: "Kevin",
+      createdAtMs: 1000,
+      updatedAtMs: 2000,
+    });
+
+    expect(entry).toEqual({
+      id: "order-queue1",
+      sessionId: "sarah-18-2026",
+      number: 28,
+      status: "preparing",
+      createdAtMs: 1000,
+      updatedAtMs: 2000,
+    });
+    expect(entry.guestName).toBeUndefined();
+  });
+});
+
 describe("local order store", () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -172,6 +196,34 @@ describe("local order store", () => {
     unsubscribe();
 
     expect(latest.find((item) => item.id === order.id).status).toBe("preparing");
+  });
+
+  it("exposes a public queue view that follows status changes", async () => {
+    const store = createOrderStore();
+    const first = await store.createOrder({
+      guestName: "Tom",
+      toppings: [],
+      sauces: ["none"],
+      clientRequestId: "order-queuea",
+    });
+    const second = await store.createOrder({
+      guestName: "Lea",
+      toppings: [],
+      sauces: ["ketchup"],
+      clientRequestId: "order-queueb",
+    });
+    let queue = [];
+    const unsubscribe = store.subscribeQueue((value) => {
+      queue = value;
+    });
+
+    expect(queue.map((entry) => entry.id)).toEqual([first.id, second.id]);
+    expect(queue.map((entry) => entry.status)).toEqual(["received", "received"]);
+
+    await store.updateStatus(first.id, "ready");
+
+    expect(queue.find((entry) => entry.id === first.id).status).toBe("ready");
+    unsubscribe();
   });
 
   it("blocks new orders once the session is archived", async () => {

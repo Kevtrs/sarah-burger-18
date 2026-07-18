@@ -146,6 +146,35 @@ function sortOrders(orders) {
   return [...orders].sort((a, b) => a.number - b.number);
 }
 
+export function normalizeQueueEntry(data) {
+  return {
+    id: data.id || "",
+    sessionId: data.sessionId || sessionId,
+    number: Number(data.number),
+    status: allowedStatuses.includes(data.status) ? data.status : "received",
+    createdAtMs: Number(data.createdAtMs || Date.now()),
+    updatedAtMs: Number(data.updatedAtMs || data.createdAtMs || Date.now()),
+  };
+}
+
+function queueEntryFromOrder(order, overrides = {}) {
+  const normalized = normalizeOrder(order);
+
+  return normalizeQueueEntry({
+    id: normalized.id,
+    sessionId,
+    number: normalized.number,
+    status: normalized.status,
+    createdAtMs: normalized.createdAtMs,
+    updatedAtMs: normalized.updatedAtMs,
+    ...overrides,
+  });
+}
+
+function sortQueueEntries(entries) {
+  return [...entries].sort((a, b) => a.number - b.number);
+}
+
 function normalizeClientRequestId(value) {
   if (typeof value === "string" && /^[a-zA-Z0-9_-]{8,80}$/.test(value)) return value;
   return crypto.randomUUID?.() || `order-${Date.now()}`;
@@ -337,6 +366,12 @@ function makeFirebaseOrderStore() {
 
       await set(orderRef, serverPayload);
 
+      try {
+        await set(ref(db, sessionPath(`queuePublic/${orderId}`)), queueEntryFromOrder(optimisticPayload));
+      } catch (err) {
+        console.warn("QUEUE_SYNC_ERROR", err);
+      }
+
       return normalizeOrder(optimisticPayload);
     },
 
@@ -398,6 +433,33 @@ function makeFirebaseOrderStore() {
       return () => unsubscribe?.();
     },
 
+    subscribeQueue(onChange, onError) {
+      const { db } = requireFirebaseRuntime();
+      assertSessionKey();
+      const queueRef = ref(db, sessionPath("queuePublic"));
+      let unsubscribe;
+      let cancelled = false;
+
+      ensureGuestAuth()
+        .then(() => {
+          if (cancelled) return;
+          unsubscribe = onValue(
+            queueRef,
+            (snapshot) => {
+              const value = snapshot.val() || {};
+              onChange(sortQueueEntries(Object.values(value).map(normalizeQueueEntry)));
+            },
+            onError,
+          );
+        })
+        .catch(onError);
+
+      return () => {
+        cancelled = true;
+        unsubscribe?.();
+      };
+    },
+
     subscribeOrder(orderId, onChange, onError) {
       const { db } = requireFirebaseRuntime();
       assertSessionKey();
@@ -430,7 +492,7 @@ function makeFirebaseOrderStore() {
       return () => unsubscribe?.();
     },
 
-    async updateStatus(orderId, status) {
+    async updateStatus(orderId, status, order = null) {
       if (!allowedStatuses.includes(status)) throw new Error("Statut invalide.");
       const { db } = requireFirebaseRuntime();
       assertSessionKey();
@@ -439,6 +501,38 @@ function makeFirebaseOrderStore() {
         status,
         updatedAtMs: serverTimestamp(),
       });
+
+      try {
+        if (order) {
+          await set(
+            ref(db, sessionPath(`queuePublic/${orderId}`)),
+            queueEntryFromOrder({ ...order, status, updatedAtMs: Date.now() }),
+          );
+        } else {
+          await update(ref(db, sessionPath(`queuePublic/${orderId}`)), {
+            status,
+            updatedAtMs: Date.now(),
+          });
+        }
+      } catch (err) {
+        console.warn("QUEUE_SYNC_ERROR", err);
+      }
+    },
+
+    async syncQueueIndex(orders) {
+      await requireKitchenUser();
+      const { db } = requireFirebaseRuntime();
+      assertSessionKey();
+      const updates = {};
+
+      for (const order of orders) {
+        assertValidFirebaseKey(order.id, "orderId");
+        updates[sessionPath(`queuePublic/${order.id}`)] = queueEntryFromOrder(order);
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await update(ref(db), updates);
+      }
     },
 
     async archiveSession() {
@@ -603,6 +697,12 @@ function makeLocalStore() {
       return subscribeLocal(onChange);
     },
 
+    subscribeQueue(onChange) {
+      return subscribeLocal((orders) => {
+        onChange(sortQueueEntries(orders.map((order) => queueEntryFromOrder(order))));
+      });
+    },
+
     subscribeOrderMessages(orderId, onChange) {
       assertValidFirebaseKey(orderId, "orderId");
       const handler = () => {
@@ -664,6 +764,8 @@ function makeLocalStore() {
       );
       writeOrders(orders);
     },
+
+    async syncQueueIndex() {},
 
     async archiveSession() {
       localStorage.setItem(archiveKey, "yes");

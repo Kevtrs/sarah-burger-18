@@ -114,6 +114,14 @@ export function KitchenDashboard({ store }) {
     );
   }, [isUnlocked, store]);
 
+  useEffect(() => {
+    if (!isUnlocked || !ordersSnapshotReady || !store.syncQueueIndex) return;
+
+    store.syncQueueIndex(orders).catch((err) => {
+      console.warn("QUEUE_SYNC_ERROR", err);
+    });
+  }, [isUnlocked, orders, ordersSnapshotReady, store]);
+
   const counts = useMemo(() => {
     return orders.reduce(
       (acc, order) => {
@@ -137,7 +145,7 @@ export function KitchenDashboard({ store }) {
     setPendingId(order.id);
     setError("");
     try {
-      await store.updateStatus(order.id, status);
+      await store.updateStatus(order.id, status, order);
     } catch (err) {
       setError(err.message || "Le statut n'a pas pu être changé.");
     } finally {
