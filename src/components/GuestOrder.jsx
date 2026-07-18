@@ -442,8 +442,8 @@ export function GuestOrder({ store }) {
           </div>
 
           <ToppingsGrid selectedToppings={selectedToppings} onToggle={toggleTopping} />
-          <NachosOption selected={wantsNachos} onToggle={toggleNachos} />
           <SaucesGrid selectedSauces={selectedSauces} onToggle={toggleSauce} />
+          <NachosOption selected={wantsNachos} onToggle={toggleNachos} />
         </section>
       )}
 
@@ -900,8 +900,8 @@ function AddBurgerModal({ existingNames, onCancel, onConfirm }) {
           {error && <InlineNotice tone="error">{error}</InlineNotice>}
 
           <ToppingsGrid selectedToppings={selectedToppings} onToggle={toggleTopping} />
-          <NachosOption selected={wantsNachos} onToggle={toggleNachos} />
           <SaucesGrid selectedSauces={selectedSauces} onToggle={toggleSauce} />
+          <NachosOption selected={wantsNachos} onToggle={toggleNachos} />
         </div>
 
         <div className="modal-sheet__footer">

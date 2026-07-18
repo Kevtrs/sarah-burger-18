@@ -372,8 +372,8 @@
 .burger-preview {
   position: relative;
   display: grid;
-  min-height: 86px;
-  grid-template-columns: 70px minmax(0, 1fr);
+  min-height: 100px;
+  grid-template-columns: 92px minmax(0, 1fr);
   gap: 10px;
   align-items: center;
   padding: 28px 10px 10px;
@@ -393,8 +393,8 @@
 }
 
 .burger-preview img {
-  width: 66px;
-  height: 54px;
+  width: 88px;
+  height: 76px;
   object-fit: contain;
   transform: rotate(-5deg);
 }
@@ -555,6 +555,10 @@
 
 .mascot-bacon .option-card__art img {
   transform: scale(1.14) rotate(var(--option-rotate, 0deg));
+}
+
+.mascot-nachos .option-card__art img {
+  transform: scale(0.84) rotate(var(--option-rotate, 0deg));
 }
 
 .no-sauce-art {

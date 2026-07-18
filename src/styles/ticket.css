@@ -6,8 +6,8 @@
 
 .review-copy {
   position: relative;
-  min-height: 108px;
-  padding-right: 96px;
+  min-height: 116px;
+  padding-right: 116px;
 }
 
 .review-copy h1 {
@@ -23,10 +23,10 @@
 
 .review-copy img {
   position: absolute;
-  top: 4px;
-  right: 6px;
-  width: 82px;
-  height: 82px;
+  top: 0;
+  right: 4px;
+  width: 104px;
+  height: 104px;
   object-fit: contain;
   transform: rotate(7deg);
 }

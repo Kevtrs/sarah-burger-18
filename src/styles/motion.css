@@ -57,28 +57,28 @@
 
 .intro-burger {
   position: absolute;
-  right: -18px;
-  bottom: 45px;
-  width: 88px;
+  right: -8px;
+  bottom: 34px;
+  width: 62px;
   transform: rotate(10deg);
   animation: intro-mascot-in 420ms var(--ease-pop) 540ms both;
 }
 
 .intro-mascot {
   position: absolute;
-  width: 72px;
+  width: 62px;
   filter: drop-shadow(2px 3px 0 rgba(23, 18, 15, 0.24));
   animation: intro-mascot-in 420ms var(--ease-pop) 520ms both;
 }
 
 .intro-mascot-a {
-  top: 22px;
-  left: -12px;
+  top: -6px;
+  left: -14px;
   --intro-rotate: -10deg;
 }
 
 .intro-mascot-b {
-  top: 34px;
+  top: -6px;
   right: -14px;
   --intro-rotate: 12deg;
 }
