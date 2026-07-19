@@ -1076,7 +1076,6 @@ function SionsContractModal({ order, onSign }) {
             Commande #{order.number} au nom de {order.guestName}. Accepte de leur vendre tes informations pour
             débloquer ton ticket Sarah Burger.
           </p>
-          <small>Contrat bidon de la team COD. Aucune vraie info n&apos;est envoyée.</small>
         </div>
 
         <button className="primary-action cta-button sions-contract-sign" type="button" onClick={onSign} autoFocus>
