@@ -1,6 +1,7 @@
 import {
   CheckCircle2,
   Clock3,
+  ClipboardPlus,
   Flame,
   Archive,
   KeyRound,
@@ -26,6 +27,8 @@ import {
   statuses,
   toppings,
 } from "../data/menu";
+import { isCashierOrder } from "../services/cashierQueue";
+import { CashierMode } from "./CashierMode";
 import { useNewOrderSound } from "../hooks/useNewOrderSound";
 import { OrderMessages } from "./OrderMessages";
 
@@ -55,6 +58,7 @@ export function KitchenDashboard({ store }) {
   const [ordersSnapshotReady, setOrdersSnapshotReady] = useState(false);
   const [pickupAcks, setPickupAcks] = useState({});
   const [now, setNow] = useState(() => Date.now());
+  const [isCashierOpen, setIsCashierOpen] = useState(false);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30000);
@@ -231,6 +235,14 @@ export function KitchenDashboard({ store }) {
           {store.mode === "firebase" ? "Temps réel" : "Mode local"}
         </span>
         <button
+          className="primary-action compact kitchen-cashier-toggle"
+          type="button"
+          onClick={() => setIsCashierOpen(true)}
+        >
+          <ClipboardPlus aria-hidden="true" />
+          Mode caisse
+        </button>
+        <button
           className="secondary-action compact kitchen-sound-toggle"
           type="button"
           aria-pressed={soundEnabled}
@@ -264,6 +276,14 @@ export function KitchenDashboard({ store }) {
           Sortir
         </button>
       </section>
+
+      {isCashierOpen && (
+        <CashierMode
+          store={store}
+          sessionMeta={sessionMeta}
+          onClose={() => setIsCashierOpen(false)}
+        />
+      )}
 
       {error && <p className="notice notice-error">{error}</p>}
       {sessionMeta.paused && <p className="notice notice-warning">Stand en pause : les invites voient le menu mais ne peuvent plus envoyer.</p>}
@@ -474,6 +494,7 @@ function OrderTicket({ order, now, pickupAck, store, isPending, onChangeStatus }
               {wait.label}
             </span>
           )}
+          {isCashierOrder(order) && <span className="cashier-source-badge">CAISSE</span>}
           <span className={`status-pill status-${status.color}`}>{status.kitchenLabel}</span>
         </div>
       </header>

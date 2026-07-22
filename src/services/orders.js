@@ -156,6 +156,7 @@ export function normalizeOrder(data) {
     clientRequestId: data.clientRequestId || "",
     pickupToken: typeof data.pickupToken === "string" ? data.pickupToken : "",
     guestUid: data.guestUid || "",
+    source: data.source === "cashier" ? "cashier" : "guest",
     number: Number(data.number),
     guestName: data.guestName || "",
     toppings: normalizeArray(data.toppings, allowedToppings),
@@ -303,7 +304,7 @@ function createOrderPayload(input, number, user) {
   const pickupToken = normalizePickupToken(input.pickupToken);
   const sauces = serializeSauces(input.sauces);
 
-  return {
+  const payload = {
     id: clientRequestId,
     sessionId,
     clientRequestId,
@@ -319,6 +320,10 @@ function createOrderPayload(input, number, user) {
     createdAtMs: now,
     updatedAtMs: now,
   };
+
+  if (input.source === "cashier") payload.source = "cashier";
+
+  return payload;
 }
 
 async function assertFirebaseConnected(db) {

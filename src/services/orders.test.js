@@ -99,6 +99,33 @@ describe("normalizeOrder", () => {
     expect(withTruthyString.nachos).toBe(false);
     expect(withTrue.nachos).toBe(true);
   });
+
+  it("keeps legacy orders without source compatible", () => {
+    const order = normalizeOrder({
+      id: "o9",
+      number: 28,
+      guestName: "Mila",
+      sauce: "mayo",
+      status: "received",
+      createdAtMs: 1000,
+    });
+
+    expect(order.source).toBe("guest");
+  });
+
+  it("normalizes cashier orders with their source", () => {
+    const order = normalizeOrder({
+      id: "o10",
+      number: 29,
+      guestName: "Noa",
+      source: "cashier",
+      sauce: "none",
+      status: "received",
+      createdAtMs: 1000,
+    });
+
+    expect(order.source).toBe("cashier");
+  });
 });
 
 describe("assertValidFirebaseKey", () => {
@@ -227,6 +254,23 @@ describe("local order store", () => {
 
     expect(retry.id).toBe(first.id);
     expect(retry.number).toBe(first.number);
+  });
+
+  it("creates cashier orders through the same local store path", async () => {
+    const store = createOrderStore();
+    const order = await store.createOrder({
+      guestName: "Nina",
+      toppings: ["pickles", "bacon"],
+      sauces: ["bigmac", "ketchup"],
+      nachos: true,
+      source: "cashier",
+      clientRequestId: "cashier-localtest",
+    });
+
+    expect(order.source).toBe("cashier");
+    expect(order.status).toBe("received");
+    expect(order.sauces.sort()).toEqual(["bigmac", "ketchup"]);
+    expect(order.nachos).toBe(true);
   });
 
   it("moves an order through updateStatus", async () => {
