@@ -4,6 +4,7 @@ import {
   cashierQueueStorageKey,
   enqueueCashierDraft,
   getCashierDraftErrors,
+  getCashierSyncErrorMessage,
   isCashierOrder,
   readCashierQueue,
   shouldQueueCashierError,
@@ -118,9 +119,10 @@ describe("cashier offline queue", () => {
     expect(queue[0].attempts).toBe(1);
   });
 
-  it("detects network errors as queueable but not permission errors", () => {
+  it("detects network and permission errors as queueable", () => {
     expect(shouldQueueCashierError(new Error("Connexion indisponible."), true)).toBe(true);
-    expect(shouldQueueCashierError(new Error("Permission denied"), true)).toBe(false);
+    expect(shouldQueueCashierError(new Error("Permission denied"), true)).toBe(true);
+    expect(getCashierSyncErrorMessage(new Error("PERMISSION_DENIED: Permission denied"))).toContain("regles Firebase");
   });
 });
 

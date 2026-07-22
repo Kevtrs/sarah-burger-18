@@ -12,7 +12,7 @@ import {
   WifiOff,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   assetPath,
   baseBurger,
@@ -27,6 +27,7 @@ import {
   createEmptyCashierDraft,
   describeCashierDraft,
   enqueueCashierDraft,
+  getCashierSyncErrorMessage,
   hasCashierDraftContent,
   readCashierQueue,
   shouldQueueCashierError,
@@ -67,6 +68,7 @@ export function CashierMode({ store, sessionMeta = {}, onClose }) {
     typeof navigator === "undefined" ? true : navigator.onLine,
   );
   const [queueEntries, setQueueEntries] = useState(() => readCashierQueue());
+  const lastAutoSyncKeyRef = useRef("");
 
   const describedDraft = useMemo(() => describeCashierDraft(draft), [draft]);
   const canSend = cart.length > 0 || hasCashierDraftContent(draft);
@@ -123,10 +125,20 @@ export function CashierMode({ store, sessionMeta = {}, onClose }) {
   }, [refreshQueue]);
 
   useEffect(() => {
-    if (!isOnline || queueEntries.length === 0 || isSyncing) return undefined;
+    if (!isOnline) {
+      lastAutoSyncKeyRef.current = "";
+      return undefined;
+    }
+
+    if (queueEntries.length === 0 || isSyncing) return undefined;
+
+    const autoSyncKey = queueEntries.map((entry) => entry.clientRequestId).join("|");
+    if (lastAutoSyncKeyRef.current === autoSyncKey) return undefined;
+    lastAutoSyncKeyRef.current = autoSyncKey;
+
     const timer = window.setTimeout(() => retryQueue({ silent: true }), 600);
     return () => window.clearTimeout(timer);
-  }, [isOnline, isSyncing, queueEntries.length, retryQueue]);
+  }, [isOnline, isSyncing, queueEntries, retryQueue]);
 
   function updateDraft(updates) {
     setDraft((current) => ({ ...current, ...updates }));
@@ -233,7 +245,10 @@ export function CashierMode({ store, sessionMeta = {}, onClose }) {
         sent += 1;
       } catch (err) {
         if (shouldQueueCashierError(err, isOnline)) {
-          enqueueCashierDraft(item, { sessionMeta });
+          enqueueCashierDraft(item, {
+            sessionMeta,
+            lastError: getCashierSyncErrorMessage(err),
+          });
           processed.add(item.clientRequestId);
           queued += 1;
         } else {
@@ -308,11 +323,16 @@ export function CashierMode({ store, sessionMeta = {}, onClose }) {
               <span>Prenom</span>
               <div className="cashier-name-input">
                 <input
+                  id="cashier-guest-name"
+                  name="cashier_guest_name_no_autofill"
+                  type="text"
                   value={draft.guestName}
-                  autoComplete="off"
+                  autoComplete="new-password"
+                  autoCorrect="off"
                   inputMode="text"
                   maxLength={32}
                   placeholder="Ex. Kevin"
+                  spellCheck="false"
                   onChange={(event) => updateDraft({ guestName: event.target.value })}
                 />
                 <button className="secondary-action compact" type="button" onClick={clearName}>

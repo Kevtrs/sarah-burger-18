@@ -230,7 +230,7 @@ export function enqueueCashierDraft(draft, options = {}) {
     createdAtMs: queue[existingIndex]?.createdAtMs || now(),
     updatedAtMs: now(),
     attempts: queue[existingIndex]?.attempts || 0,
-    lastError: queue[existingIndex]?.lastError || "",
+    lastError: options.lastError || queue[existingIndex]?.lastError || "",
   };
 
   if (existingIndex >= 0) {
@@ -249,7 +249,7 @@ export function shouldQueueCashierError(error, isOnline = true) {
   const message = `${error?.code || ""} ${error?.message || ""}`.toLowerCase();
   if (!message.trim()) return true;
   if (message.includes("archiv") || message.includes("pause") || message.includes("plus disponible")) return false;
-  if (message.includes("permission")) return false;
+  if (message.includes("permission")) return true;
 
   return (
     message.includes("connexion") ||
@@ -259,6 +259,20 @@ export function shouldQueueCashierError(error, isOnline = true) {
     message.includes("joignable") ||
     message.includes("firebase")
   );
+}
+
+export function getCashierSyncErrorMessage(error) {
+  const message = `${error?.code || ""} ${error?.message || ""}`.toLowerCase();
+
+  if (message.includes("permission")) {
+    return "Acces Firebase refuse. Commande gardee: redeploie les regles Firebase puis reessaie.";
+  }
+
+  if (message.includes("connexion") || message.includes("network") || message.includes("offline")) {
+    return "Connexion perdue. Commande gardee en attente de synchronisation.";
+  }
+
+  return error?.message || "Synchronisation impossible.";
 }
 
 export async function syncCashierQueue(store, options = {}) {
@@ -279,7 +293,7 @@ export async function syncCashierQueue(store, options = {}) {
         ...entry,
         attempts: entry.attempts + 1,
         updatedAtMs: now(),
-        lastError: error.message || "Synchronisation impossible.",
+        lastError: getCashierSyncErrorMessage(error),
       };
       failed.push(nextEntry);
       remaining.push(nextEntry);
